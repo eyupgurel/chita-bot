@@ -1,19 +1,22 @@
+use crate::binance_models::DepthUpdate;
+use crate::binance_socket::stream_binance_socket;
+use crate::kucoin_models::Level2Depth;
+use crate::kucoin_socket::stream_kucoin_socket;
+use crate::r#type::Either;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
-use crate::binance_models::DepthUpdate;
-use crate::binance_socket::{stream_binance_socket};
-use crate::kucoin_models::Level2Depth;
-use crate::kucoin_socket::{stream_kucoin_socket};
-use crate::r#type::Either;
 
 mod binance_models;
+mod binance_socket;
 mod kucoin_models;
 mod kucoin_socket;
-mod binance_socket;
 mod r#type;
 
-fn main() {
+mod bluefin;
+
+#[tokio::main]
+async fn main() {
     let (tx_kucoin, rx_kucoin) = mpsc::channel();
     let (tx_binance, rx_binance) = mpsc::channel();
 
@@ -84,5 +87,3 @@ fn main() {
         }
     }
 }
-
-
