@@ -70,26 +70,16 @@ fn main() {
                 None => panic!("Key not found"),
             }
 
-            for i in 0..binance_ob.ask_orders.len() {
-                println!(
-                    "{}. ask: {}, size: {}",
-                    i, binance_ob.ask_orders[i].0, binance_ob.ask_orders[i].1
-                );
+            for (i, (ask, size)) in binance_ob.ask_orders.iter().enumerate() {
+                println!("{}. ask: {}, size: {}", i, ask, size);
             }
 
-
-            for i in 0..kucoin_ob.data.asks.len() {
-                println!(
-                    "{}. ask: {:?}",
-                    i, kucoin_ob.data.asks[i]
-                );
+            for (i, ask) in kucoin_ob.data.asks.iter().enumerate() {
+                println!("{}. ask: {:?}", i, ask);
             }
 
-            for i in 0..kucoin_ob.data.bids.len() {
-                println!(
-                    "{}. bid: {:?}",
-                    i, kucoin_ob.data.bids[i]
-                );
+            for (i, bid) in kucoin_ob.data.bids.iter().enumerate() {
+                println!("{}. bid: {:?}", i, bid);
             }
         }
     }
