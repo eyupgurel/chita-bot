@@ -1,12 +1,10 @@
-use crate::models::binance_models::DepthUpdate;
-use crate::models::kucoin_models::Level2Depth;
-use crate::r#type::Either;
 use crate::sockets::binance_socket::stream_binance_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
 use log::debug;
+use crate::models::common::OrderBook;
 
 pub async fn converge() {
     let (tx_kucoin, rx_kucoin) = mpsc::channel();
@@ -20,13 +18,13 @@ pub async fn converge() {
         stream_binance_socket(tx_binance);
     });
 
-    let mut shared_map: HashMap<String, Either<Level2Depth, DepthUpdate>> = HashMap::new();
+    let mut shared_map: HashMap<String, OrderBook> = HashMap::new();
 
     loop {
         // Reap results from kucoin
         match rx_kucoin.try_recv() {
             Ok((key, value)) => {
-                shared_map.insert(key, Either::Left(value));
+                shared_map.insert(key, value);
             }
             Err(mpsc::TryRecvError::Empty) => {
                 // No message from kucoin yet
@@ -39,7 +37,7 @@ pub async fn converge() {
         // Reap results from binance
         match rx_binance.try_recv() {
             Ok((key, value)) => {
-                shared_map.insert(key, Either::Right(value));
+                shared_map.insert(key, value);
             }
             Err(mpsc::TryRecvError::Empty) => {
                 // No message from binance yet
@@ -50,30 +48,28 @@ pub async fn converge() {
         }
 
         if shared_map.len() == 2 {
-            let kucoin_ob: &Level2Depth;
-            let binance_ob: &DepthUpdate;
+            let kucoin_ob: &OrderBook;
+            let binance_ob: &OrderBook;
 
             match shared_map.get("kucoin_ob") {
-                Some(Either::Left(_val)) => kucoin_ob = _val,
-                Some(Either::Right(_val)) => panic!("Error!"),
+                Some(_val) => kucoin_ob = _val,
                 None => panic!("Key not found"),
             }
 
             match shared_map.get("binance_ob") {
-                Some(Either::Left(_val)) => panic!("Error!"),
-                Some(Either::Right(_val)) => binance_ob = _val,
+                Some(_val) => binance_ob = _val,
                 None => panic!("Key not found"),
             }
 
-            for (i, (ask, size)) in binance_ob.ask_orders.iter().enumerate() {
+            for (i, (ask, size)) in binance_ob.asks.iter().enumerate() {
                 debug!("{}. ask: {}, size: {}", i, ask, size);
             }
 
-            for (i, ask) in kucoin_ob.data.asks.iter().enumerate() {
+            for (i, ask) in kucoin_ob.asks.iter().enumerate() {
                 debug!("{}. ask: {:?}", i, ask);
             }
 
-            for (i, bid) in kucoin_ob.data.bids.iter().enumerate() {
+            for (i, bid) in kucoin_ob.bids.iter().enumerate() {
                 debug!("{}. bid: {:?}", i, bid);
             }
         }

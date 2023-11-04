@@ -1,4 +1,7 @@
-use serde::{Deserialize, Serialize};
+use std::fmt;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde::de::{SeqAccess, Visitor};
+use crate::models::common::OrderBook;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,34 +42,56 @@ pub struct Level2Depth {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Level2Data {
-    pub bids: Vec<Level2Entry>,
+    #[serde(deserialize_with = "deserialize_as_string_tuples")]
+    pub bids: Vec<(String, String)>,
     pub sequence: u64,
     pub timestamp: u64,
     pub ts: u64,
-    pub asks: Vec<Level2Entry>,
+    #[serde(deserialize_with = "deserialize_as_string_tuples")]
+    pub asks: Vec<(String, String)>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Level2Entry(#[serde(with = "string_or_float")] pub f64, pub u64);
 
-pub mod string_or_float {
-    use serde::{de::Error, Deserialize, Deserializer, Serializer};
+fn deserialize_as_string_tuples<'de, D>(deserializer: D) -> Result<Vec<(String, String)>, D::Error>
+    where
+        D: Deserializer<'de>,
+{
+    struct StringTupleVisitor;
 
-    pub fn serialize<S>(value: &f64, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-    {
-        serializer.serialize_str(&value.to_string())
+    impl<'de> Visitor<'de> for StringTupleVisitor {
+        type Value = Vec<(String, String)>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a sequence of sequences")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+            where
+                S: SeqAccess<'de>,
+        {
+            let mut values = Vec::new();
+
+            while let Some(sub_seq) = seq.next_element::<(String, f64)>()? {
+                let (s1, s2) = sub_seq;
+                values.push((s1, s2.to_string()));
+            }
+
+            Ok(values)
+        }
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<f64, D::Error>
-        where
-            D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        s.parse::<f64>().map_err(D::Error::custom)
+    deserializer.deserialize_seq(StringTupleVisitor)
+}
+
+impl From<Level2Depth> for OrderBook {
+    fn from(l2_depth: Level2Depth) -> Self {
+        OrderBook {
+            asks: l2_depth.data.asks,
+            bids: l2_depth.data.bids,
+        }
     }
 }
+
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
