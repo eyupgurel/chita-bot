@@ -4,11 +4,11 @@ mod models;
 mod r#type;
 
 mod bluefin;
-mod sockets;
 mod connector;
 mod env;
+mod sockets;
 
 #[tokio::main]
 async fn main() {
-        converge().await;
+    converge().await;
 }
