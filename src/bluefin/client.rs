@@ -13,7 +13,7 @@ pub mod client {
 
     // custom modules
     use crate::bluefin::orders::{
-        create_market_order, get_serialized_order, to_order_request, Order,
+        create_limit_ioc_order, get_serialized_order, to_order_request, Order,
     };
 
     #[derive(Deserialize, Debug)]
@@ -78,11 +78,12 @@ pub mod client {
         async fn init(wallet_key: &str, api_gateway: &str, onboarding_url: &str) -> BluefinClient;
         async fn onboard(&mut self);
         async fn fetch_markets(&mut self);
-        fn create_market_order(
+        fn create_limit_ioc_order(
             &self,
             market: &str,
             is_buy: bool,
             reduce_only: bool,
+            price: f64,
             quantity: f64,
             leverage: u128,
         ) -> Order;
@@ -179,11 +180,12 @@ pub mod client {
             } // end of for loop
         }
 
-        fn create_market_order(
+        fn create_limit_ioc_order(
             &self,
             market: &str,
             is_buy: bool,
             reduce_only: bool,
+            price: f64,
             quantity: f64,
             leverage: u128,
         ) -> Order {
@@ -191,11 +193,12 @@ pub mod client {
             // TODO add if/else checks
             let market_id = self.markets.get(&market.to_owned()).unwrap().to_string();
 
-            return create_market_order(
+            return create_limit_ioc_order(
                 self.wallet.address.clone(),
                 market_id,
                 is_buy,
                 reduce_only,
+                price,
                 quantity,
                 leverage,
             );
@@ -283,7 +286,7 @@ pub mod client {
     }
 
     #[tokio::test]
-    async fn should_create_market_order() {
+    async fn should_create_limit_ioc_order() {
         let bluefin_client = BluefinClient::init(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
@@ -291,10 +294,12 @@ pub mod client {
         )
         .await;
 
-        let order = bluefin_client.create_market_order("ETH-PERP", true, false, 0.33, 1);
+        let order = bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.1, 0.33, 1);
         // println!("{:#?}", order);
-        assert_eq!(order.orderType, "MARKET");
+        assert_eq!(order.orderType, "LIMIT");
+        assert_eq!(order.timeInForce, "IOC");
         assert_eq!(order.postOnly, false);
+        assert_eq!(order.price, 1600100000000000000000);
         assert_eq!(order.quantity, 330000000000000000);
         assert_eq!(order.leverage, 1000000000000000000);
     }
@@ -308,12 +313,12 @@ pub mod client {
         )
         .await;
 
-        let order = bluefin_client.create_market_order("ETH-PERP", true, false, 0.33, 1);
+        let order = bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.0, 0.33, 1);
         let _signature = bluefin_client.sign_order(order);
     }
 
     #[tokio::test]
-    async fn should_place_market_order() {
+    async fn should_place_an_order_on_bluefin_staging() {
         let bluefin_client = BluefinClient::init(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
@@ -321,7 +326,8 @@ pub mod client {
         )
         .await;
 
-        let order = bluefin_client.create_market_order("ETH-PERP", true, false, 0.33, 1);
+        let order =
+            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 0.33, 1);
 
         println!("{:#?}", order);
 

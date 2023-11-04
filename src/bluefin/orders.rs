@@ -141,18 +141,21 @@ pub fn get_serialized_order(order: &Order) -> String {
 //                                   PUBLIC METHODS                                    //
 // ----------------------------------------------------------------------------------- //
 
-pub fn create_market_order(
+pub fn create_limit_ioc_order(
     wallet_address: String,
     market: String,
     is_buy: bool,
     reduce_only: bool,
+    price: f64,
     quantity: f64,
     leverage: u128,
 ) -> Order {
     let mut order = Order {
         market,
         isBuy: is_buy,
-        price: (Unit::Ether(&"0").to_wei_str().unwrap()).parse().unwrap(),
+        price: (Unit::Ether(&format!("{}", price)).to_wei_str().unwrap())
+            .parse()
+            .unwrap(),
         quantity: (Unit::Ether(&format!("{}", quantity)).to_wei_str().unwrap())
             .parse()
             .unwrap(),
@@ -166,8 +169,8 @@ pub fn create_market_order(
         expiration: 3655643731,
         salt: get_current_time(),
         ioc: true,
-        orderType: "MARKET".to_string(),
-        timeInForce: "GTT".to_string(),
+        orderType: "LIMIT".to_string(),
+        timeInForce: "IOC".to_string(),
         hash: "".to_string(),
     };
 
