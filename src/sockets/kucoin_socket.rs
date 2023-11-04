@@ -1,55 +1,64 @@
-use std::fs;
+use crate::models::kucoin_models::Response;
+use crate::models::kucoin_models::{Comm, Level2Depth};
+use reqwest;
 use std::net::TcpStream;
 use std::sync::mpsc;
 use tungstenite::connect;
-use url::Url;
-use reqwest;
-use crate::models::kucoin_models::{Response, TradeOrderMessage};
 use tungstenite::stream::MaybeTlsStream;
-use crate::models::kucoin_models::{Comm, Level2Depth};
+use url::Url;
 
-static KUCOIN_FUTURES_TOKEN_REQUEST_URL: &str = "https://api-futures.kucoin.com/api/v1/bullet-public";
+static KUCOIN_FUTURES_TOKEN_REQUEST_URL: &str =
+    "https://api-futures.kucoin.com/api/v1/bullet-public";
 static KUCOIN_FUTURES_BASE_WSS_URL: &str = "wss://ws-api-futures.kucoin.com/endpoint";
 static KUCOIN_SOCKET_TOPIC: &str = "/contractMarket/level2Depth50:XBTUSDTM";
 
 pub fn get_kucoin_url() -> String {
     let client = reqwest::blocking::Client::new();
 
-    let j: Result<Response, Box<dyn std::error::Error>> =
-        client.post(KUCOIN_FUTURES_TOKEN_REQUEST_URL)
-            .send()
-            .map_err(|e| format!("Error making the request: {}", e).into())
-            .and_then(|res| res.text().map_err(|e| format!("Error reading the response body: {}", e).into()))
-            .and_then(|body| serde_json::from_str(&body).map_err(Into::into));
+    let j: Result<Response, Box<dyn std::error::Error>> = client
+        .post(KUCOIN_FUTURES_TOKEN_REQUEST_URL)
+        .send()
+        .map_err(|e| format!("Error making the request: {}", e).into())
+        .and_then(|res| {
+            res.text()
+                .map_err(|e| format!("Error reading the response body: {}", e).into())
+        })
+        .and_then(|body| serde_json::from_str(&body).map_err(Into::into));
 
-    let _token = j.map(|response| response.data.token)
+    let _token = j
+        .map(|response| response.data.token)
         .map_err(|e| {
             println!("Error: {}", e);
             e
-        }).unwrap();
+        })
+        .unwrap();
 
-
-    let _kucoin_futures_wss_url = format!(
-        "{}?token={}",
-        KUCOIN_FUTURES_BASE_WSS_URL, _token
-    );
+    let _kucoin_futures_wss_url = format!("{}?token={}", KUCOIN_FUTURES_BASE_WSS_URL, _token);
 
     return _kucoin_futures_wss_url;
 }
 
-pub fn get_kucoin_socket(_kucoin_futures_wss_url: &String) -> (tungstenite::WebSocket<MaybeTlsStream<TcpStream>>, Comm) {
+pub fn get_kucoin_socket(
+    _kucoin_futures_wss_url: &String,
+) -> (tungstenite::WebSocket<MaybeTlsStream<TcpStream>>, Comm) {
     let (mut kucoin_socket, _response) =
         connect(Url::parse(&_kucoin_futures_wss_url).unwrap()).expect("Can't connect.");
 
     // Construct the message
-    let sub_message = format!(r#"{{
+    let sub_message = format!(
+        r#"{{
         "type": "subscribe",
         "topic":"{}"
-    }}"#, KUCOIN_SOCKET_TOPIC);
+    }}"#,
+        KUCOIN_SOCKET_TOPIC
+    );
 
     // Send the message
-    kucoin_socket.send(tungstenite::protocol::Message::Text(sub_message.to_string())).unwrap();
-
+    kucoin_socket
+        .send(tungstenite::protocol::Message::Text(
+            sub_message.to_string(),
+        ))
+        .unwrap();
 
     let read = kucoin_socket.read().expect("Error reading message");
 
@@ -61,7 +70,6 @@ pub fn get_kucoin_socket(_kucoin_futures_wss_url: &String) -> (tungstenite::WebS
     };
 
     let ack: Comm = serde_json::from_str(&ack_msg).expect("Can't parse");
-
 
     return (kucoin_socket, ack);
 }
@@ -87,15 +95,21 @@ pub fn stream_kucoin_socket(_tx: mpsc::Sender<(String, Level2Depth)>) {
                     continue;
                 }
 
-                let parsed_kucoin_ob: Level2Depth = serde_json::from_str(&msg).expect("Can't parse");
-                _tx.send(("kucoin_ob".to_string(), parsed_kucoin_ob)).unwrap();
+                let parsed_kucoin_ob: Level2Depth =
+                    serde_json::from_str(&msg).expect("Can't parse");
+                _tx.send(("kucoin_ob".to_string(), parsed_kucoin_ob))
+                    .unwrap();
 
                 if last_ping_time.elapsed() >= std::time::Duration::from_secs(50) {
                     let ping = Comm {
                         id: ack.id.clone(),
                         type_: "ping".to_string(),
                     };
-                    kucoin_socket.send(tungstenite::protocol::Message::Text(serde_json::to_string(&ping).unwrap())).unwrap();
+                    kucoin_socket
+                        .send(tungstenite::protocol::Message::Text(
+                            serde_json::to_string(&ping).unwrap(),
+                        ))
+                        .unwrap();
                     last_ping_time = std::time::Instant::now();
                 }
             }
@@ -111,17 +125,18 @@ pub fn stream_kucoin_socket(_tx: mpsc::Sender<(String, Level2Depth)>) {
     }
 }
 
-
-
 #[test]
 fn test_trade_order_message_deserialization() {
+    use crate::models::kucoin_models::TradeOrderMessage;
+    use std::fs;
+
     // Read the JSON string from the file
     let json_str = fs::read_to_string("./src/tests/seed/kucoin/trade-orders-per-market.json")
         .expect("Unable to read the file");
 
     // Deserialize the JSON string into TradeOrderMessage struct
-    let parsed_message: TradeOrderMessage = serde_json::from_str(&json_str)
-        .expect("Failed to parse the JSON");
+    let parsed_message: TradeOrderMessage =
+        serde_json::from_str(&json_str).expect("Failed to parse the JSON");
 
     // Print and assert or perform tests as necessary
     println!("{:?}", parsed_message);
