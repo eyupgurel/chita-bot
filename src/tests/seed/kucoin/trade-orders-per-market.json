@@ -1,0 +1,27 @@
+{
+  "type": "message",
+  "topic": "/contractMarket/tradeOrders:XBTUSDM",
+  "subject": "symbolOrderChange",
+  "channelType": "private",
+  "data": {
+    "orderId": "5cdfc138b21023a909e5ad55",
+    "symbol": "XBTUSDM",
+    "type": "match",
+    "status": "open",
+    "matchSize": "",
+    "matchPrice": "",
+    "orderType": "limit",
+    "side": "buy",
+    "price": "3600",
+    "size": "20000",
+    "remainSize": "20001",
+    "filledSize": "20000",
+    "canceledSize": "0",
+    "tradeId": "5ce24c16b210233c36eexxxx",
+    "clientOid": "5ce24c16b210233c36ee321d",
+    "orderTime": 1545914149935808589,
+    "oldSize ": "15000",
+    "liquidity": "maker",
+    "ts": 1545914149935808589
+  }
+}

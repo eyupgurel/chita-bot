@@ -67,3 +67,38 @@ pub mod string_or_float {
         s.parse::<f64>().map_err(D::Error::custom)
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TradeOrderMessage {
+    #[serde(rename = "type")]
+    pub message_type: String,
+    pub topic: String,
+    pub subject: String,
+    pub channel_type: String,
+    pub data: OrderData,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderData {
+    pub order_id: String,
+    pub symbol: String,
+    pub type_: String,
+    pub status: String,
+    pub match_size: String,
+    pub match_price: String,
+    pub order_type: String,
+    pub side: String,
+    pub price: String,
+    pub size: String,
+    pub remain_size: String,
+    pub filled_size: String,
+    pub canceled_size: String,
+    pub trade_id: String,
+    pub client_oid: String,
+    pub order_time: i64,
+    pub old_size: Option<String>,
+    pub liquidity: String,
+    pub ts: i64,
+}
