@@ -1,8 +1,8 @@
 use crate::models::binance_models::DepthUpdate;
-use crate::sockets::binance_socket::stream_binance_socket;
 use crate::models::kucoin_models::Level2Depth;
-use crate::sockets::kucoin_socket::stream_kucoin_socket;
 use crate::r#type::Either;
+use crate::sockets::binance_socket::stream_binance_socket;
+use crate::sockets::kucoin_socket::stream_kucoin_socket;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;

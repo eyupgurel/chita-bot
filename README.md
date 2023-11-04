@@ -3,7 +3,7 @@
 
 ## How to use
 - The project requires rust and cargo >= `v1.71.1`
-- Update `.env.rs` file in `src` directory
+- Update `.env` file before running the bot
 
     | Command                    | Description           |
     | -------------------------- | --------------------- |
