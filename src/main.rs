@@ -8,7 +8,22 @@ mod connector;
 mod env;
 mod sockets;
 
+use bluefin::{BluefinClient, ClientMethods};
+use env::EnvVars;
+
 #[tokio::main]
 async fn main() {
+    // get env variables
+    let vars: EnvVars = env::env_variables();
+
+    // start connector
     converge().await;
+
+    // create bluefin client
+    let _client = BluefinClient::init(
+        &vars.bluefin_wallet_key,
+        &vars.bluefin_endpoint,
+        &vars.bluefin_on_boarding_url,
+    )
+    .await;
 }
