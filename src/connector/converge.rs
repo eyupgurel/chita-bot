@@ -6,6 +6,8 @@ use crate::sockets::kucoin_socket::stream_kucoin_socket;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
+use log::debug;
+
 pub async fn converge() {
     let (tx_kucoin, rx_kucoin) = mpsc::channel();
     let (tx_binance, rx_binance) = mpsc::channel();
@@ -64,15 +66,15 @@ pub async fn converge() {
             }
 
             for (i, (ask, size)) in binance_ob.ask_orders.iter().enumerate() {
-                println!("{}. ask: {}, size: {}", i, ask, size);
+                debug!("{}. ask: {}, size: {}", i, ask, size);
             }
 
             for (i, ask) in kucoin_ob.data.asks.iter().enumerate() {
-                println!("{}. ask: {:?}", i, ask);
+                debug!("{}. ask: {:?}", i, ask);
             }
 
             for (i, bid) in kucoin_ob.data.bids.iter().enumerate() {
-                println!("{}. bid: {:?}", i, bid);
+                debug!("{}. bid: {:?}", i, bid);
             }
         }
     }

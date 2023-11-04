@@ -14,6 +14,8 @@ use env::EnvVars;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     // get env variables
     let vars: EnvVars = env::env_variables();
 
