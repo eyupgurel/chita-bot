@@ -21,6 +21,27 @@ pub mod client {
         pub token: String,
     }
 
+    #[derive(Deserialize, Debug)]
+    pub struct Error {
+        pub code: u64,
+        pub message: String,
+    }
+
+    #[derive(Deserialize, Debug)]
+    pub struct PostResponse {
+        pub error: Error,
+    }
+
+    #[derive(Deserialize, Debug)]
+    pub struct UserPosition {
+        pub symbol: String,
+        pub side: bool,
+        pub entry_price: u128,
+        pub quantity: u128,
+        pub margin: u128,
+        pub leverage: u128,
+    }
+
     #[derive(Debug, Clone)]
     pub struct Wallet {
         pub signing_key: SigningKey,
@@ -40,7 +61,16 @@ pub mod client {
      * Given a wallet's private key, creates a wallet of ED25519
      */
     pub fn create_wallet(wallet_key: &str) -> Wallet {
-        let bytes = hex::decode(wallet_key).expect("Decoding failed");
+        let mut key = wallet_key;
+        // remove 0x from key
+        if wallet_key.starts_with("0x") {
+            let mut chars = wallet_key.chars();
+            chars.next();
+            chars.next();
+            key = chars.as_str();
+        }
+
+        let bytes = hex::decode(key).expect("Decoding failed");
         let mut private_key_bytes: [u8; 32] = [0; 32];
         private_key_bytes.copy_from_slice(&bytes[0..32]);
 
@@ -78,6 +108,7 @@ pub mod client {
         async fn init(wallet_key: &str, api_gateway: &str, onboarding_url: &str) -> BluefinClient;
         async fn onboard(&mut self);
         async fn fetch_markets(&mut self);
+        async fn get_user_position(&self, market: &str) -> UserPosition;
         fn create_limit_ioc_order(
             &self,
             market: &str,
@@ -180,6 +211,64 @@ pub mod client {
             } // end of for loop
         }
 
+        async fn get_user_position(&self, market: &str) -> UserPosition {
+            let client = reqwest::Client::new();
+            let query = vec![("symbol", market)];
+
+            let res = client
+                .get(format!("{}/userPosition", self.api_gateway))
+                .header(
+                    "Authorization",
+                    format!("Bearer {}", &self.auth_token.to_owned()),
+                )
+                .query(&query)
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap();
+
+            // let resp = serde_json::from_str(&res).unwrap();
+
+            let position: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            // if user address key does not exist, implies that the user has no position
+            // assuming the get call did not throw error
+            // TODO check for error as well
+            if position["userAddress"].is_string() {
+                let ep_str: String =
+                    serde_json::from_str(&position["avgEntryPrice"].to_string()).unwrap();
+                let quantity_str: String =
+                    serde_json::from_str(&position["quantity"].to_string()).unwrap();
+                let margin_str: String =
+                    serde_json::from_str(&position["margin"].to_string()).unwrap();
+
+                let leverage_str: String =
+                    serde_json::from_str(&position["leverage"].to_string()).unwrap();
+
+                let side_str: String = serde_json::from_str(&position["side"].to_string()).unwrap();
+
+                return UserPosition {
+                    symbol: market.to_string(),
+                    side: if side_str == "SELL" { false } else { true },
+                    quantity: quantity_str.parse::<u128>().unwrap(),
+                    entry_price: ep_str.parse::<u128>().unwrap(),
+                    margin: margin_str.parse::<u128>().unwrap(),
+                    leverage: leverage_str.parse::<u128>().unwrap(),
+                };
+            } else {
+                return UserPosition {
+                    symbol: market.to_string(),
+                    side: false,
+                    quantity: 0,
+                    entry_price: 0,
+                    margin: 0,
+                    leverage: 0,
+                };
+            };
+        }
+
         fn create_limit_ioc_order(
             &self,
             market: &str,
@@ -220,7 +309,6 @@ pub mod client {
 
         async fn post_signed_order(&self, order: Order, signature: String) {
             let order_request = to_order_request(order, signature);
-            println!("{}", format!("{}/orders", self.api_gateway));
 
             let client = reqwest::Client::new();
             let res = client
@@ -239,9 +327,9 @@ pub mod client {
 
             println!("Response: {}", res);
 
-            // let v: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
-            // let hash: &str = v["hash"].as_str().unwrap();
-            // return hash.to_string();
+            let resp: PostResponse = serde_json::from_str(&res).unwrap();
+            println!("Error code: {}", resp.error.code);
+            println!("Error message: {}", resp.error.message);
         }
     }
 
@@ -283,6 +371,20 @@ pub mod client {
             bluefin_client.markets.get("BTC-PERP").unwrap(),
             "0x252abf8630394f08e458c6329fab0d6c103ca2f403e05e7913e024f63d0e992d"
         );
+    }
+
+    #[tokio::test]
+
+    async fn should_get_user_position() {
+        let bluefin_client = BluefinClient::init(
+            "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
+            "https://dapi.api.sui-staging.bluefin.io",
+            "https://testnet.bluefin.io",
+        )
+        .await;
+
+        let position: UserPosition = bluefin_client.get_user_position("ETH-PERP").await;
+        assert_eq!(position.quantity, 0);
     }
 
     #[tokio::test]
@@ -328,8 +430,6 @@ pub mod client {
 
         let order =
             bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 0.33, 1);
-
-        println!("{:#?}", order);
 
         let signature = bluefin_client.sign_order(order.clone());
         bluefin_client
