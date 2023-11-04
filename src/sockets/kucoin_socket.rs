@@ -1,11 +1,12 @@
+use std::fs;
 use std::net::TcpStream;
 use std::sync::mpsc;
 use tungstenite::connect;
 use url::Url;
 use reqwest;
-use crate::kucoin_models::{Response};
+use crate::models::kucoin_models::{Response, TradeOrderMessage};
 use tungstenite::stream::MaybeTlsStream;
-use crate::kucoin_models::{Comm, Level2Depth};
+use crate::models::kucoin_models::{Comm, Level2Depth};
 
 static KUCOIN_FUTURES_TOKEN_REQUEST_URL: &str = "https://api-futures.kucoin.com/api/v1/bullet-public";
 static KUCOIN_FUTURES_BASE_WSS_URL: &str = "wss://ws-api-futures.kucoin.com/endpoint";
@@ -108,4 +109,23 @@ pub fn stream_kucoin_socket(_tx: mpsc::Sender<(String, Level2Depth)>) {
             }
         }
     }
+}
+
+
+
+#[test]
+fn test_trade_order_message_deserialization() {
+    // Read the JSON string from the file
+    let json_str = fs::read_to_string("./src/tests/seed/kucoin/trade-orders-per-market.json")
+        .expect("Unable to read the file");
+
+    // Deserialize the JSON string into TradeOrderMessage struct
+    let parsed_message: TradeOrderMessage = serde_json::from_str(&json_str)
+        .expect("Failed to parse the JSON");
+
+    // Print and assert or perform tests as necessary
+    println!("{:?}", parsed_message);
+
+    // Example assertion
+    assert_eq!(parsed_message.message_type, "message");
 }

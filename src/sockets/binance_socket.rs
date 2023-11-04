@@ -3,7 +3,7 @@ use std::sync::mpsc;
 use tungstenite::connect;
 use url::Url;
 use tungstenite::stream::MaybeTlsStream;
-use crate::binance_models::DepthUpdate;
+use crate::models::binance_models::DepthUpdate;
 
 static BINANCE_WS_API: &str = "wss://fstream.binance.com";
 
