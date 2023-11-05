@@ -1,6 +1,6 @@
 pub mod client {
     use async_trait::async_trait;
-    use log::{debug, error, info};
+    use log::{debug, error, info, warn};
 
     #[allow(deprecated)]
     use base64::encode;
@@ -341,9 +341,9 @@ pub mod client {
             let response: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
 
             if response["error"].is_object() {
-                return PostResponse {
-                    error: Some(serde_json::from_str(&response["error"].to_string()).unwrap()),
-                };
+                let error: Error = serde_json::from_str(&response["error"].to_string()).unwrap();
+                warn!("Order placement failed: {}", error.message);
+                return PostResponse { error: Some(error) };
             } else {
                 return PostResponse { error: None };
             }
