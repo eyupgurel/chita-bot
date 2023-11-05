@@ -1,30 +1,21 @@
+use crate::models::binance_models::DepthUpdate;
+use crate::models::common::OrderBook;
+use log::info;
 use std::net::TcpStream;
 use std::sync::mpsc;
 use tungstenite::connect;
-use url::Url;
 use tungstenite::stream::MaybeTlsStream;
-use crate::models::binance_models::DepthUpdate;
-use crate::models::common::OrderBook;
+use url::Url;
 
 static BINANCE_WS_API: &str = "wss://fstream.binance.com";
 
-
 pub fn get_binance_socket() -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
-
-    let binance_url = format!(
-        "{}/ws/btcusdt@depth5@100ms",
-        BINANCE_WS_API
-    );
+    let binance_url = format!("{}/ws/btcusdt@depth5@100ms", BINANCE_WS_API);
 
     let (binance_socket, _response) =
         connect(Url::parse(&binance_url).unwrap()).expect("Can't connect.");
 
-    println!("Connected to binance stream.");
-    println!("HTTP status code: {}", _response.status());
-    println!("Response headers:");
-    for (ref header, ref header_value) in _response.headers() {
-        println!("- {}: {:?}", header, header_value);
-    }
+    info!("Connected to binance stream.");
     return binance_socket;
 }
 
@@ -44,12 +35,11 @@ pub fn stream_binance_socket(_tx: mpsc::Sender<(String, OrderBook)>) {
                     _ => {
                         println!("Error getting text");
                         continue;
-
                     }
                 };
 
                 let parsed: DepthUpdate = serde_json::from_str(&msg).expect("Can't parse");
-                let ob:OrderBook = parsed.into();
+                let ob: OrderBook = parsed.into();
                 _tx.send(("binance_ob".to_string(), ob)).unwrap();
             }
             Err(e) => {

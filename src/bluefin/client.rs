@@ -1,5 +1,6 @@
 pub mod client {
     use async_trait::async_trait;
+    use log::{debug, error, info};
 
     #[allow(deprecated)]
     use base64::encode;
@@ -138,6 +139,11 @@ pub mod client {
             // get market ids from dapi
             client.fetch_markets().await;
 
+            info!(
+                "Bluefin client initialized for wallet: {}",
+                client.wallet.address
+            );
+
             return client;
         }
 
@@ -180,11 +186,11 @@ pub mod client {
             let response: Value = serde_json::from_str(&res).unwrap();
             if response["error"].is_object() {
                 let error: Error = serde_json::from_str(&response["error"].to_string()).unwrap();
-                println!(
+                error!(
                     "Error while onboarding - code: {}, message: {}",
                     error.code, error.message
                 );
-                panic!();
+                panic!()
             }
 
             let auth: Auth = serde_json::from_str(&res).unwrap();
@@ -330,7 +336,7 @@ pub mod client {
                 .await
                 .unwrap();
 
-            println!("Response: {}", res);
+            debug!("Response: {}", res);
 
             let response: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
 
