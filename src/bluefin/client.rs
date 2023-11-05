@@ -12,9 +12,7 @@ pub mod client {
     use std::collections::HashMap;
 
     // custom modules
-    use crate::bluefin::orders::{
-        create_limit_ioc_order, get_serialized_order, to_order_request, Order,
-    };
+    use crate::bluefin::orders::{create_limit_ioc_order, to_order_request, Order};
 
     #[derive(Deserialize, Debug)]
     pub struct Auth {
@@ -29,7 +27,7 @@ pub mod client {
 
     #[derive(Deserialize, Debug)]
     pub struct PostResponse {
-        pub error: Error,
+        pub error: Option<Error>,
     }
 
     #[derive(Deserialize, Debug)]
@@ -119,7 +117,7 @@ pub mod client {
             leverage: u128,
         ) -> Order;
         fn sign_order(&self, order: Order) -> String;
-        async fn post_signed_order(&self, order: Order, signature: String);
+        async fn post_signed_order(&self, order: Order, signature: String) -> PostResponse;
     }
 
     #[async_trait]
@@ -179,7 +177,15 @@ pub mod client {
                 .await
                 .unwrap();
 
-            // println!("{:#?}", res);
+            let response: Value = serde_json::from_str(&res).unwrap();
+            if response["error"].is_object() {
+                let error: Error = serde_json::from_str(&response["error"].to_string()).unwrap();
+                println!(
+                    "Error while onboarding - code: {}, message: {}",
+                    error.code, error.message
+                );
+                panic!();
+            }
 
             let auth: Auth = serde_json::from_str(&res).unwrap();
             self.auth_token = auth.token;
@@ -280,10 +286,11 @@ pub mod client {
         ) -> Order {
             // assuming market will exist in markets map
             // TODO add if/else checks
-            let market_id = self.markets.get(&market.to_owned()).unwrap().to_string();
+            let market_id = self.markets.get(market).unwrap().to_string();
 
             return create_limit_ioc_order(
                 self.wallet.address.clone(),
+                market.to_string(),
                 market_id,
                 is_buy,
                 reduce_only,
@@ -294,9 +301,7 @@ pub mod client {
         }
 
         fn sign_order(&self, order: Order) -> String {
-            let serialized_msg = get_serialized_order(&order);
-
-            let msg_hash_decoded = hex::decode(digest(&serialized_msg)).expect("Decoding failed");
+            let msg_hash_decoded = hex::decode(digest(&order.serialized)).expect("Decoding failed");
             let sig: Signature = self.wallet.signing_key.sign(&msg_hash_decoded);
             let order_signature = format!(
                 "{}1{}",
@@ -307,8 +312,11 @@ pub mod client {
             return order_signature;
         }
 
-        async fn post_signed_order(&self, order: Order, signature: String) {
-            let order_request = to_order_request(order, signature);
+        async fn post_signed_order(&self, order: Order, signature: String) -> PostResponse {
+            let mut order_request = to_order_request(order, signature);
+            println!("order_request: {:#?}", order_request);
+            order_request.symbol = "ETH-PERP".to_string();
+            println!("{}/orders", self.api_gateway);
 
             let client = reqwest::Client::new();
             let res = client
@@ -327,9 +335,19 @@ pub mod client {
 
             println!("Response: {}", res);
 
-            let resp: PostResponse = serde_json::from_str(&res).unwrap();
-            println!("Error code: {}", resp.error.code);
-            println!("Error message: {}", resp.error.message);
+            let response: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            // if user address key does not exist, implies that the user has no position
+            // assuming the get call did not throw error
+            // TODO check for error as well
+            if response["error"].is_object() {
+                let error: Error = serde_json::from_str(&response["error"].to_string()).unwrap();
+                println!("Error code: {}", error.code);
+                println!("Error message: {}", error.message);
+                return PostResponse { error: Some(error) };
+            } else {
+                return PostResponse { error: None };
+            }
         }
     }
 
@@ -420,7 +438,7 @@ pub mod client {
     }
 
     #[tokio::test]
-    async fn should_place_an_order_on_bluefin_staging() {
+    async fn should_place_an_order() {
         let bluefin_client = BluefinClient::init(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
@@ -432,8 +450,9 @@ pub mod client {
             bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 0.33, 1);
 
         let signature = bluefin_client.sign_order(order.clone());
-        bluefin_client
+        let status = bluefin_client
             .post_signed_order(order.clone(), signature)
             .await;
+        assert_eq!(status.error.unwrap().code, 3055);
     }
 }
