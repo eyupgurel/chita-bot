@@ -334,14 +334,10 @@ pub mod client {
 
             let response: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
 
-            // if user address key does not exist, implies that the user has no position
-            // assuming the get call did not throw error
-            // TODO check for error as well
             if response["error"].is_object() {
-                let error: Error = serde_json::from_str(&response["error"].to_string()).unwrap();
-                println!("Error code: {}", error.code);
-                println!("Error message: {}", error.message);
-                return PostResponse { error: Some(error) };
+                return PostResponse {
+                    error: Some(serde_json::from_str(&response["error"].to_string()).unwrap()),
+                };
             } else {
                 return PostResponse { error: None };
             }

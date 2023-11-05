@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha256::digest;
 use web3_unit_converter::Unit;
 
-use crate::bluefin::utils::get_current_time;
+use crate::bluefin::utils::{get_current_time, get_random_number};
 
 #[derive(Debug, Clone)]
 #[allow(non_snake_case)]
@@ -74,8 +74,8 @@ fn get_order_flags(order: &Order) -> u32 {
 /**
  * Returns hash of the order
  */
-pub fn get_order_hash(order: Order) -> String {
-    let serialized_msg = get_serialized_order(&order);
+pub fn get_order_hash(order: &Order) -> String {
+    let serialized_msg = get_serialized_order(order);
     let order_hash = digest(hex::decode(&serialized_msg).expect("Decoding failed"));
     return order_hash;
 }
@@ -169,7 +169,7 @@ pub fn create_limit_ioc_order(
         postOnly: false,
         orderbookOnly: true,
         expiration: get_current_time() + 100_000,
-        salt: get_current_time(),
+        salt: get_random_number(),
         ioc: true,
         orderType: "LIMIT".to_string(),
         timeInForce: "IOC".to_string(),
@@ -177,11 +177,12 @@ pub fn create_limit_ioc_order(
         serialized: "".to_string(),
     };
 
-    // order hash
-    let mut order_with_market_id = order.clone();
-    order_with_market_id.market = market_id;
+    let order_with_market_id = Order {
+        market: market_id,
+        ..order.clone()
+    };
 
-    order.hash = get_order_hash(order_with_market_id.clone());
+    order.hash = get_order_hash(&order_with_market_id);
 
     // serialize order
     order.serialized = get_serialized_order(&order_with_market_id);
