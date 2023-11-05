@@ -313,10 +313,7 @@ pub mod client {
         }
 
         async fn post_signed_order(&self, order: Order, signature: String) -> PostResponse {
-            let mut order_request = to_order_request(order, signature);
-            println!("order_request: {:#?}", order_request);
-            order_request.symbol = "ETH-PERP".to_string();
-            println!("{}/orders", self.api_gateway);
+            let order_request = to_order_request(order, signature);
 
             let client = reqwest::Client::new();
             let res = client
@@ -438,7 +435,7 @@ pub mod client {
     }
 
     #[tokio::test]
-    async fn should_place_an_order() {
+    async fn should_revert_when_placing_order_due_to_insufficient_balance() {
         let bluefin_client = BluefinClient::init(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
@@ -447,7 +444,7 @@ pub mod client {
         .await;
 
         let order =
-            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 0.33, 1);
+            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 10.0, 1);
 
         let signature = bluefin_client.sign_order(order.clone());
         let status = bluefin_client
