@@ -1,9 +1,9 @@
 use crate::connector::converge::converge;
 
-mod models;
 mod bluefin;
 mod connector;
 mod env;
+mod models;
 mod sockets;
 mod tests;
 
@@ -17,9 +17,6 @@ async fn main() {
     // get env variables
     let vars: EnvVars = env::env_variables();
 
-    // start connector
-    converge().await;
-
     // create bluefin client
     let _client = BluefinClient::init(
         &vars.bluefin_wallet_key,
@@ -27,4 +24,7 @@ async fn main() {
         &vars.bluefin_on_boarding_url,
     )
     .await;
+
+    // start connector
+    converge().await;
 }
