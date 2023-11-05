@@ -1,4 +1,6 @@
 use serde::{Serialize, Deserialize};
+use crate::models::common::OrderBook;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DepthUpdate {
     #[serde(rename = "e")]
@@ -27,4 +29,13 @@ pub struct DepthUpdate {
 
     #[serde(rename = "a")]
     pub ask_orders: Vec<(String, String)>,
+}
+
+impl From<DepthUpdate> for OrderBook {
+    fn from(depth_update: DepthUpdate) -> Self {
+        OrderBook {
+            asks: depth_update.ask_orders,
+            bids: depth_update.bid_orders,
+        }
+    }
 }
