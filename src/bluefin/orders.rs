@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha256::digest;
 use web3_unit_converter::Unit;
 
-use crate::bluefin::utils::get_current_time;
+use crate::bluefin::utils::{get_current_time, get_random_number};
 
 #[derive(Debug, Clone)]
 #[allow(non_snake_case)]
@@ -22,6 +22,7 @@ pub struct Order {
     pub orderType: String,
     pub timeInForce: String,
     pub hash: String,
+    pub serialized: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -73,8 +74,8 @@ fn get_order_flags(order: &Order) -> u32 {
 /**
  * Returns hash of the order
  */
-pub fn get_order_hash(order: Order) -> String {
-    let serialized_msg = get_serialized_order(&order);
+pub fn get_order_hash(order: &Order) -> String {
+    let serialized_msg = get_serialized_order(order);
     let order_hash = digest(hex::decode(&serialized_msg).expect("Decoding failed"));
     return order_hash;
 }
@@ -85,26 +86,26 @@ pub fn get_order_hash(order: Order) -> String {
 pub fn to_order_request(order: Order, signature: String) -> OrderJSONRequest {
     return OrderJSONRequest {
         orderbookOnly: order.orderbookOnly,
-        symbol: order.market.to_string().into(),
-        price: order.price.to_string().into(),
-        quantity: order.quantity.to_string().into(),
-        triggerPrice: "0".to_string().into(),
-        leverage: order.leverage.to_string().into(),
-        userAddress: order.maker.to_string().into(),
-        orderType: order.orderType.to_string().into(),
+        symbol: order.market.to_string(),
+        price: order.price.to_string(),
+        quantity: order.quantity.to_string(),
+        triggerPrice: "0".to_string(),
+        leverage: order.leverage.to_string(),
+        userAddress: order.maker.to_string(),
+        orderType: order.orderType.to_string(),
         side: if order.isBuy == true {
-            "BUY".to_string().into()
+            "BUY".to_string()
         } else {
-            "SELL".to_string().into()
+            "SELL".to_string()
         },
         reduceOnly: order.reduceOnly,
         salt: order.salt,
         expiration: order.expiration,
         orderSignature: signature,
-        timeInForce: order.timeInForce.to_string().into(),
+        timeInForce: order.timeInForce,
         postOnly: order.postOnly,
         cancelOnRevert: false,
-        clientId: "bluefin-v2-client-python".to_string().into(),
+        clientId: "chita-bot".to_string(),
     };
 }
 
@@ -143,7 +144,8 @@ pub fn get_serialized_order(order: &Order) -> String {
 
 pub fn create_limit_ioc_order(
     wallet_address: String,
-    market: String,
+    market_name: String,
+    market_id: String,
     is_buy: bool,
     reduce_only: bool,
     price: f64,
@@ -151,7 +153,7 @@ pub fn create_limit_ioc_order(
     leverage: u128,
 ) -> Order {
     let mut order = Order {
-        market,
+        market: market_name,
         isBuy: is_buy,
         price: (Unit::Ether(&format!("{}", price)).to_wei_str().unwrap())
             .parse()
@@ -166,14 +168,24 @@ pub fn create_limit_ioc_order(
         reduceOnly: reduce_only,
         postOnly: false,
         orderbookOnly: true,
-        expiration: 3655643731,
-        salt: get_current_time(),
+        expiration: get_current_time() + 100_000,
+        salt: get_random_number(),
         ioc: true,
         orderType: "LIMIT".to_string(),
         timeInForce: "IOC".to_string(),
         hash: "".to_string(),
+        serialized: "".to_string(),
     };
 
-    order.hash = get_order_hash(order.clone());
+    let order_with_market_id = Order {
+        market: market_id,
+        ..order.clone()
+    };
+
+    order.hash = get_order_hash(&order_with_market_id);
+
+    // serialize order
+    order.serialized = get_serialized_order(&order_with_market_id);
+
     return order;
 }

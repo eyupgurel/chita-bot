@@ -11,3 +11,7 @@ pub fn get_current_time() -> u128 {
 
     return in_ms;
 }
+
+pub fn get_random_number() -> u128 {
+    return get_current_time() + u128::from(rand::random::<u32>());
+}
