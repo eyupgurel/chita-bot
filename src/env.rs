@@ -1,10 +1,13 @@
 use dotenv::dotenv;
+use env_logger::{Builder, WriteStyle};
+use log::LevelFilter;
 
 // env variable struct
 pub struct EnvVars {
     pub bluefin_on_boarding_url: String,
     pub bluefin_endpoint: String,
     pub bluefin_wallet_key: String,
+    pub log_level: String,
 }
 
 /**
@@ -20,9 +23,34 @@ pub fn env_variables() -> EnvVars {
         std::env::var("BLUEFIN_ENDPOINT").expect("BLUEFIN_ENDPOINT must be set.");
     let bluefin_wallet_key =
         std::env::var("BLUEFIN_WALLET_KEY").expect("BLUEFIN_WALLET_KEY must be set.");
+    let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
+
     return EnvVars {
         bluefin_on_boarding_url,
         bluefin_endpoint,
         bluefin_wallet_key,
+        log_level,
     };
+}
+
+/**
+ * Initializes logger with provided log level
+ */
+#[allow(dead_code)]
+pub fn init_logger(log_level: String) {
+    let mut builder: Builder = Builder::new();
+
+    let filter: LevelFilter = match log_level.as_str() {
+        "Error" => LevelFilter::Error,
+        "Warn" => LevelFilter::Warn,
+        "Debug" => LevelFilter::Debug,
+        "Trace" => LevelFilter::Trace,
+        "Off" => LevelFilter::Off,
+        "Info" | _ => LevelFilter::Info,
+    };
+
+    builder
+        .filter(None, filter)
+        .write_style(WriteStyle::Always)
+        .init();
 }
