@@ -452,4 +452,24 @@ pub mod client {
             .await;
         assert_eq!(status.error.unwrap().code, 3055);
     }
+
+    #[tokio::test]
+    async fn should_place_order_successfully() {
+        let bluefin_client = BluefinClient::init(
+            "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
+            "https://dapi.api.sui-staging.bluefin.io",
+            "https://testnet.bluefin.io",
+        )
+        .await;
+
+        let order =
+            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 0.01, 3);
+
+        let signature = bluefin_client.sign_order(order.clone());
+        let status = bluefin_client
+            .post_signed_order(order.clone(), signature)
+            .await;
+
+        assert!(status.error.is_none(), "Error while placing order");
+    }
 }

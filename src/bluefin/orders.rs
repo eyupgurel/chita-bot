@@ -168,7 +168,7 @@ pub fn create_limit_ioc_order(
         reduceOnly: reduce_only,
         postOnly: false,
         orderbookOnly: true,
-        expiration: 3655643731,
+        expiration: get_current_time() + 100_000,
         salt: get_current_time(),
         ioc: true,
         orderType: "LIMIT".to_string(),
