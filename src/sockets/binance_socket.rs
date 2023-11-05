@@ -4,6 +4,7 @@ use tungstenite::connect;
 use url::Url;
 use tungstenite::stream::MaybeTlsStream;
 use crate::models::binance_models::DepthUpdate;
+use crate::models::common::OrderBook;
 
 static BINANCE_WS_API: &str = "wss://fstream.binance.com";
 
@@ -27,7 +28,7 @@ pub fn get_binance_socket() -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>>
     return binance_socket;
 }
 
-pub fn stream_binance_socket(_tx: mpsc::Sender<(String, DepthUpdate)>) {
+pub fn stream_binance_socket(_tx: mpsc::Sender<(String, OrderBook)>) {
     let mut binance_socket = get_binance_socket();
 
     loop {
@@ -48,7 +49,8 @@ pub fn stream_binance_socket(_tx: mpsc::Sender<(String, DepthUpdate)>) {
                 };
 
                 let parsed: DepthUpdate = serde_json::from_str(&msg).expect("Can't parse");
-                _tx.send(("binance_ob".to_string(), parsed)).unwrap();
+                let ob:OrderBook = parsed.into();
+                _tx.send(("binance_ob".to_string(), ob)).unwrap();
             }
             Err(e) => {
                 println!("Error during message handling: {:?}", e);

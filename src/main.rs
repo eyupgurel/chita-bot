@@ -1,8 +1,6 @@
 use crate::connector::converge::converge;
 
 mod models;
-mod r#type;
-
 mod bluefin;
 mod connector;
 mod env;
