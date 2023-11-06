@@ -11,6 +11,7 @@ pub async fn converge() {
     let (tx_kucoin_ob, rx_kucoin_ob) = mpsc::channel();
     let (tx_kucoin_ticker, rx_kucoin_ticker) = mpsc::channel();
     let (tx_binance_ob, rx_binance_ob) = mpsc::channel();
+    let (tx_binance_ob_diff, rx_binance_ob_diff) = mpsc::channel();
 
     let _handle_kucoin_ob = thread::spawn(move || {
         stream_kucoin_ob_socket("XBTUSDTM", tx_kucoin_ob);
@@ -21,7 +22,7 @@ pub async fn converge() {
     });
 
     let _handle_binance_ob = thread::spawn(|| {
-        stream_binance_ob_socket("btcusdt", tx_binance_ob);
+        stream_binance_ob_socket("btcusdt", tx_binance_ob, tx_binance_ob_diff);
     });
 
     let mut shared_map: HashMap<String, OrderBook> = HashMap::new();
@@ -65,6 +66,20 @@ pub async fn converge() {
                 panic!("Kucoin worker has disconnected!");
             }
         }
+
+        // Reap diff results from binance
+        match rx_binance_ob_diff.try_recv() {
+            Ok((_key, value)) => {
+                debug!("value: {:?}", value);
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                // No message from binance yet
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                panic!("Binance worker has disconnected!");
+            }
+        }
+
 
         if shared_map.len() == 2 {
             let kucoin_ob: &OrderBook;
