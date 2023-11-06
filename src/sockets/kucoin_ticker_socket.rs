@@ -7,8 +7,6 @@ use url::Url;
 use crate::constants::{KUCOIN_TICKERV2_SOCKET_TOPIC};
 use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 
-// Function to handle sending a ping
-
 pub fn get_kucoin_ticker_socket(
     _market: &str,
     _kucoin_futures_wss_url: &String,
@@ -49,6 +47,9 @@ pub fn get_kucoin_ticker_socket(
 pub fn stream_kucoin_ticker_socket(_market: &str, _tx: mpsc::Sender<(String, TickerV2)>) {
     let (mut kucoin_ticker_socket, mut ack) = get_kucoin_ticker_socket(_market,&get_kucoin_url());
     let mut last_ping_time = std::time::Instant::now();
+    let mut last_best_bid_price: Option<String> = None;
+    let mut last_best_ask_price: Option<String> = None;
+
     loop {
         let read = kucoin_ticker_socket.read();
 
@@ -70,8 +71,20 @@ pub fn stream_kucoin_ticker_socket(_market: &str, _tx: mpsc::Sender<(String, Tic
                 let parsed_kucoin_ticker: TickerV2 =
                     serde_json::from_str(&msg).expect("Can't parse");
 
-                _tx.send(("kucoin_ticker".to_string(), parsed_kucoin_ticker))
-                    .unwrap();
+                let price_changed = match &last_best_bid_price {
+                    Some(last_price) => &parsed_kucoin_ticker.data.best_bid_price != last_price,
+                    None => true,
+                } || match &last_best_ask_price {
+                    Some(last_price) => &parsed_kucoin_ticker.data.best_ask_price != last_price,
+                    None => true,
+                };
+
+                if price_changed {
+                    _tx.send(("kucoin_ticker".to_string(), parsed_kucoin_ticker.clone()))
+                        .unwrap();
+                    last_best_bid_price = Some(parsed_kucoin_ticker.data.best_bid_price.clone());
+                    last_best_ask_price = Some(parsed_kucoin_ticker.data.best_ask_price.clone());
+                }
 
                 send_ping(&mut kucoin_ticker_socket, &mut ack, &mut last_ping_time);
 
