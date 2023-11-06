@@ -1,7 +1,7 @@
 use crate::models::kucoin_models::{Comm, TickerV2};
 use std::net::TcpStream;
 use std::sync::mpsc;
-use tungstenite::{connect, WebSocket};
+use tungstenite::{connect};
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
 use crate::constants::{KUCOIN_TICKERV2_SOCKET_TOPIC};

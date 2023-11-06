@@ -1,9 +1,9 @@
 use crate::models::kucoin_models::Response;
 use reqwest;
 use crate::constants::{KUCOIN_FUTURES_BASE_WSS_URL, KUCOIN_FUTURES_TOKEN_REQUEST_URL};
-use crate::models::kucoin_models::{Comm, TickerV2};
+use crate::models::kucoin_models::{Comm};
 use std::net::TcpStream;
-use tungstenite::{connect, WebSocket};
+use tungstenite::{WebSocket};
 use tungstenite::stream::MaybeTlsStream;
 
 
