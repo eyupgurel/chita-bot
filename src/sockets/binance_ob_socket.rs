@@ -6,11 +6,10 @@ use std::sync::mpsc;
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
+use crate::constants::BINANCE_WS_API;
 
-static BINANCE_WS_API: &str = "wss://fstream.binance.com";
-
-pub fn get_binance_socket() -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
-    let binance_url = format!("{}/ws/btcusdt@depth5@100ms", BINANCE_WS_API);
+pub fn get_binance_ob_socket(_market:&str) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
+    let binance_url = format!("{}/ws/{}@depth5@100ms", BINANCE_WS_API, _market);
 
     let (binance_socket, _response) =
         connect(Url::parse(&binance_url).unwrap()).expect("Can't connect.");
@@ -19,8 +18,8 @@ pub fn get_binance_socket() -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>>
     return binance_socket;
 }
 
-pub fn stream_binance_socket(_tx: mpsc::Sender<(String, OrderBook)>) {
-    let mut binance_socket = get_binance_socket();
+pub fn stream_binance_ob_socket(_market:&str, _tx: mpsc::Sender<(String, OrderBook)>) {
+    let mut binance_socket = get_binance_ob_socket(_market);
 
     loop {
         let binance_socket_message;
@@ -44,7 +43,7 @@ pub fn stream_binance_socket(_tx: mpsc::Sender<(String, OrderBook)>) {
             }
             Err(e) => {
                 println!("Error during message handling: {:?}", e);
-                binance_socket = get_binance_socket();
+                binance_socket = get_binance_ob_socket(_market);
             }
         }
     }

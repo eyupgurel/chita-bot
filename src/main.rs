@@ -6,6 +6,7 @@ mod env;
 mod models;
 mod sockets;
 mod tests;
+mod constants;
 
 use bluefin::{BluefinClient, ClientMethods};
 use env::EnvVars;
