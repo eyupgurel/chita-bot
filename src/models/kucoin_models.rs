@@ -127,3 +127,29 @@ pub struct OrderData {
     pub liquidity: String,
     pub ts: i64,
 }
+
+// Define a struct for the "data" field in the JSON
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TickerData {
+    symbol: String,
+    sequence: u64,
+    best_bid_size: u32,
+    best_bid_price: String,
+    best_ask_price: String,
+    best_ask_size: u32,
+    ts: u64,
+}
+
+// Define a struct for the top-level JSON object
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TickerV2 {
+    topic: String,
+    #[serde(rename = "type")]  // Explicitly rename this one since it's a reserved keyword
+    message_type: String,
+    subject: String,
+    sn: u64,
+    data: TickerData,
+}
+

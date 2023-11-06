@@ -1,28 +1,34 @@
-use crate::sockets::binance_socket::stream_binance_socket;
-use crate::sockets::kucoin_socket::stream_kucoin_socket;
+use crate::sockets::binance_ob_socket::stream_binance_ob_socket;
+use crate::sockets::kucoin_ob_socket::stream_kucoin_ob_socket;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
 use log::debug;
 use crate::models::common::OrderBook;
+use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 
 pub async fn converge() {
-    let (tx_kucoin, rx_kucoin) = mpsc::channel();
-    let (tx_binance, rx_binance) = mpsc::channel();
+    let (tx_kucoin_ob, rx_kucoin_ob) = mpsc::channel();
+    let (tx_kucoin_ticker, rx_kucoin_ticker) = mpsc::channel();
+    let (tx_binance_ob, rx_binance_ob) = mpsc::channel();
 
-    let _handle_kucoin = thread::spawn(move || {
-        stream_kucoin_socket(tx_kucoin);
+    let _handle_kucoin_ob = thread::spawn(move || {
+        stream_kucoin_ob_socket("XBTUSDTM", tx_kucoin_ob);
     });
 
-    let _handle_binance = thread::spawn(|| {
-        stream_binance_socket(tx_binance);
+    let _handle_kucoin_ticker = thread::spawn(move || {
+        stream_kucoin_ticker_socket("XBTUSDTM", tx_kucoin_ticker);
+    });
+
+    let _handle_binance_ob = thread::spawn(|| {
+        stream_binance_ob_socket("btcusdt", tx_binance_ob);
     });
 
     let mut shared_map: HashMap<String, OrderBook> = HashMap::new();
 
     loop {
         // Reap results from kucoin
-        match rx_kucoin.try_recv() {
+        match rx_kucoin_ob.try_recv() {
             Ok((key, value)) => {
                 shared_map.insert(key, value);
             }
@@ -35,7 +41,7 @@ pub async fn converge() {
         }
 
         // Reap results from binance
-        match rx_binance.try_recv() {
+        match rx_binance_ob.try_recv() {
             Ok((key, value)) => {
                 shared_map.insert(key, value);
             }
@@ -44,6 +50,19 @@ pub async fn converge() {
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 panic!("Binance worker has disconnected!");
+            }
+        }
+
+        // Reap results from kucoin
+        match rx_kucoin_ticker.try_recv() {
+            Ok((_key, value)) => {
+                debug!("value: {:?}", value);
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                // No message from kucoin yet
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                panic!("Kucoin worker has disconnected!");
             }
         }
 
