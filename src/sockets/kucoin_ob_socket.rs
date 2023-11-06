@@ -6,7 +6,7 @@ use tungstenite::stream::MaybeTlsStream;
 use url::Url;
 use crate::constants::{KUCOIN_DEPTH_SOCKET_TOPIC};
 use crate::models::common::OrderBook;
-use crate::sockets::kucoin_utils::get_kucoin_url;
+use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 
 
 pub fn get_kucoin_ob_socket(
@@ -74,18 +74,8 @@ pub fn stream_kucoin_ob_socket(_market: &str, _tx: mpsc::Sender<(String, OrderBo
                 _tx.send(("kucoin_ob".to_string(), ob))
                     .unwrap();
 
-                if last_ping_time.elapsed() >= std::time::Duration::from_secs(50) {
-                    let ping = Comm {
-                        id: ack.id.clone(),
-                        type_: "ping".to_string(),
-                    };
-                    kucoin_socket
-                        .send(tungstenite::protocol::Message::Text(
-                            serde_json::to_string(&ping).unwrap(),
-                        ))
-                        .unwrap();
-                    last_ping_time = std::time::Instant::now();
-                }
+                send_ping(&mut kucoin_socket, &mut ack, &mut last_ping_time);
+
             }
 
             Err(e) => {

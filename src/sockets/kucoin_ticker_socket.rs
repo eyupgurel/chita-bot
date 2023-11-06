@@ -1,11 +1,13 @@
 use crate::models::kucoin_models::{Comm, TickerV2};
 use std::net::TcpStream;
 use std::sync::mpsc;
-use tungstenite::connect;
+use tungstenite::{connect, WebSocket};
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
 use crate::constants::{KUCOIN_TICKERV2_SOCKET_TOPIC};
-use crate::sockets::kucoin_utils::get_kucoin_url;
+use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
+
+// Function to handle sending a ping
 
 pub fn get_kucoin_ticker_socket(
     _market: &str,
@@ -71,18 +73,8 @@ pub fn stream_kucoin_ticker_socket(_market: &str, _tx: mpsc::Sender<(String, Tic
                 _tx.send(("kucoin_ticker".to_string(), parsed_kucoin_ticker))
                     .unwrap();
 
-                if last_ping_time.elapsed() >= std::time::Duration::from_secs(50) {
-                    let ping = Comm {
-                        id: ack.id.clone(),
-                        type_: "ping".to_string(),
-                    };
-                    kucoin_ticker_socket
-                        .send(tungstenite::protocol::Message::Text(
-                            serde_json::to_string(&ping).unwrap(),
-                        ))
-                        .unwrap();
-                    last_ping_time = std::time::Instant::now();
-                }
+                send_ping(&mut kucoin_ticker_socket, &mut ack, &mut last_ping_time);
+
             }
 
             Err(e) => {
