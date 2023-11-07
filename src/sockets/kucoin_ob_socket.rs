@@ -1,13 +1,12 @@
+use crate::constants::KUCOIN_DEPTH_SOCKET_TOPIC;
+use crate::models::common::OrderBook;
 use crate::models::kucoin_models::{Comm, Level2Depth};
+use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 use std::net::TcpStream;
 use std::sync::mpsc;
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
-use crate::constants::{KUCOIN_DEPTH_SOCKET_TOPIC};
-use crate::models::common::OrderBook;
-use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
-
 
 pub fn get_kucoin_ob_socket(
     _market: &str,
@@ -54,7 +53,7 @@ pub fn stream_kucoin_ob_socket(_market: &str, _tx: mpsc::Sender<(String, OrderBo
 
         match read {
             Ok(message) => {
-                let kucoin_socket_message = message;
+                let kucoin_socket_message: tungstenite::Message = message;
 
                 let msg = match kucoin_socket_message {
                     tungstenite::Message::Text(s) => s,
@@ -69,18 +68,17 @@ pub fn stream_kucoin_ob_socket(_market: &str, _tx: mpsc::Sender<(String, OrderBo
 
                 let parsed_kucoin_ob: Level2Depth =
                     serde_json::from_str(&msg).expect("Can't parse");
-                let ob:OrderBook = parsed_kucoin_ob.into();
+                let ob: OrderBook = parsed_kucoin_ob.into();
 
-                _tx.send(("kucoin_ob".to_string(), ob))
-                    .unwrap();
+                _tx.send(("kucoin_ob".to_string(), ob)).unwrap();
 
                 send_ping(&mut kucoin_socket, &mut ack, &mut last_ping_time);
-
             }
 
             Err(e) => {
                 println!("Error during message handling: {:?}", e);
-                let (mut new_kucoin_socket, mut new_ack) = get_kucoin_ob_socket(_market, &get_kucoin_url());
+                let (mut new_kucoin_socket, mut new_ack) =
+                    get_kucoin_ob_socket(_market, &get_kucoin_url());
                 std::mem::swap(&mut kucoin_socket, &mut new_kucoin_socket);
                 std::mem::swap(&mut ack, &mut new_ack);
                 continue;

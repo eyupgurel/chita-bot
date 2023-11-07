@@ -16,4 +16,4 @@ Cargo.lock
 src/.DS_Store
 .idea
 .vscode
-src/.env
+.env
