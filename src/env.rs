@@ -5,8 +5,10 @@ use log::LevelFilter;
 // env variable struct
 pub struct EnvVars {
     pub bluefin_on_boarding_url: String,
+    pub bluefin_websocket_url: String,
     pub bluefin_endpoint: String,
     pub bluefin_wallet_key: String,
+    pub bluefin_leverage: u128,
     pub log_level: String,
 }
 
@@ -23,12 +25,20 @@ pub fn env_variables() -> EnvVars {
         std::env::var("BLUEFIN_ENDPOINT").expect("BLUEFIN_ENDPOINT must be set.");
     let bluefin_wallet_key =
         std::env::var("BLUEFIN_WALLET_KEY").expect("BLUEFIN_WALLET_KEY must be set.");
+    let bluefin_websocket_url =
+        std::env::var("BLUEFIN_WEB_SOCKET_URL").expect("BLUEFIN_WEB_SOCKET_URL must be set.");
+    let bluefin_leverage = std::env::var("BLUEFIN_LEVERAGE")
+        .expect("BLUEFIN_LEVERAGE must be set.")
+        .parse::<u128>()
+        .unwrap();
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
 
     return EnvVars {
         bluefin_on_boarding_url,
         bluefin_endpoint,
         bluefin_wallet_key,
+        bluefin_websocket_url,
+        bluefin_leverage,
         log_level,
     };
 }
