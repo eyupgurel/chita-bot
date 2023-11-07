@@ -376,7 +376,7 @@ pub mod client {
                 let (mut bluefin_socket, _) =
                     connect(url::Url::parse(url.as_str()).unwrap()).expect("Failed to connect");
 
-                info!("Connected to bluefin websocket");
+                info!("Connected to Bluefin Websocket");
 
                 let request = json!([
                     "SUBSCRIBE",
@@ -403,8 +403,6 @@ pub mod client {
 
             let mut bluefin_socket =
                 connect_socket(self.websocket_url.clone(), self.auth_token.clone());
-
-            println!("Starting to loop!");
 
             loop {
                 let read = bluefin_socket.read();

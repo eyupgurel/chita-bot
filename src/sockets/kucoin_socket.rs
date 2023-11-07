@@ -1,3 +1,4 @@
+use crate::models::common::OrderBook;
 use crate::models::kucoin_models::Response;
 use crate::models::kucoin_models::{Comm, Level2Depth};
 use reqwest;
@@ -6,7 +7,6 @@ use std::sync::mpsc;
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
-use crate::models::common::OrderBook;
 
 static KUCOIN_FUTURES_TOKEN_REQUEST_URL: &str =
     "https://api-futures.kucoin.com/api/v1/bullet-public";
@@ -83,7 +83,7 @@ pub fn stream_kucoin_socket(_tx: mpsc::Sender<(String, OrderBook)>) {
 
         match read {
             Ok(message) => {
-                let kucoin_socket_message = message;
+                let kucoin_socket_message: tungstenite::Message = message;
 
                 let msg = match kucoin_socket_message {
                     tungstenite::Message::Text(s) => s,
@@ -98,10 +98,9 @@ pub fn stream_kucoin_socket(_tx: mpsc::Sender<(String, OrderBook)>) {
 
                 let parsed_kucoin_ob: Level2Depth =
                     serde_json::from_str(&msg).expect("Can't parse");
-                let ob:OrderBook = parsed_kucoin_ob.into();
+                let ob: OrderBook = parsed_kucoin_ob.into();
 
-                _tx.send(("kucoin_ob".to_string(), ob))
-                    .unwrap();
+                _tx.send(("kucoin_ob".to_string(), ob)).unwrap();
 
                 if last_ping_time.elapsed() >= std::time::Duration::from_secs(50) {
                     let ping = Comm {

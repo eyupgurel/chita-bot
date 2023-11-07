@@ -48,7 +48,7 @@ async fn test_websocket_echo() {
     // Send a message.
     let msg = "Hello, WebSocket!";
     ws_stream
-        .send(tungstenite::protocol::Message::Text(msg.into()))
+        .send(msg.into())
         .await
         .expect("Failed to send message");
 

@@ -10,7 +10,7 @@ use url::Url;
 static BINANCE_WS_API: &str = "wss://fstream.binance.com";
 
 pub fn get_binance_socket() -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
-    let binance_url = format!("{}/ws/btcusdt@depth5@100ms", BINANCE_WS_API);
+    let binance_url: String = format!("{}/ws/btcusdt@depth5@100ms", BINANCE_WS_API);
 
     let (binance_socket, _response) =
         connect(Url::parse(&binance_url).unwrap()).expect("Can't connect.");

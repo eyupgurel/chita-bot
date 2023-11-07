@@ -54,7 +54,7 @@ async fn mock_bluefin_websocket() {
         let json_str = fs::read_to_string("./src/tests/seed/bluefin/bluefin-partial-depth.json")
             .expect("Unable to read the file");
         bluefin_socket
-            .send(tungstenite::protocol::Message::Text(json_str.into()))
+            .send(json_str.into())
             .await
             .expect("Failed to send message");
         let (tx, _) = mpsc::channel();

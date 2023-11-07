@@ -17,12 +17,18 @@ async fn main() {
     env::init_logger(vars.log_level);
 
     // create bluefin client
-    let _client = BluefinClient::init(
+    let client = BluefinClient::init(
         &vars.bluefin_wallet_key,
         &vars.bluefin_endpoint,
         &vars.bluefin_on_boarding_url,
+        &vars.bluefin_websocket_url,
+        vars.bluefin_leverage,
     )
     .await;
+
+    // start bluefin event listener
+    // this will block the main thread and converge method will never run!
+    client.listen_to_web_socket().await;
 
     // start connector
     converge().await;
