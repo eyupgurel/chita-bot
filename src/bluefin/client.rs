@@ -1,6 +1,8 @@
 pub mod client {
     use async_trait::async_trait;
     use log::{debug, error, info, warn};
+    use std::net::TcpStream;
+    use tungstenite::connect;
 
     #[allow(deprecated)]
     use base64::encode;
@@ -8,12 +10,16 @@ pub mod client {
     use blake2b_simd::Params;
     use ed25519_dalek::*;
     use serde::Deserialize;
-    use serde_json::Value;
+    use serde_json::{json, Value};
     use sha256::digest;
     use std::collections::HashMap;
 
     // custom modules
-    use crate::bluefin::orders::{create_limit_ioc_order, to_order_request, Order};
+    use crate::bluefin::{
+        orders::{create_limit_ioc_order, to_order_request, Order},
+        utils::parse_user_position,
+    };
+    use tungstenite::stream::MaybeTlsStream;
 
     #[derive(Deserialize, Debug)]
     pub struct Auth {
@@ -32,10 +38,11 @@ pub mod client {
     }
 
     #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
     pub struct UserPosition {
         pub symbol: String,
         pub side: bool,
-        pub entry_price: u128,
+        pub avg_entry_price: u128,
         pub quantity: u128,
         pub margin: u128,
         pub leverage: u128,
@@ -52,8 +59,19 @@ pub mod client {
         wallet: Wallet,
         api_gateway: String,
         onboarding_url: String,
+        websocket_url: String,
         auth_token: String,
+        leverage: u128,
         markets: HashMap<String, String>,
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct OrderUpdate {
+        pub hash: String,
+        pub symbol: String,
+        pub order_status: String,
+        pub cancel_reason: String,
     }
 
     /**
@@ -104,7 +122,13 @@ pub mod client {
 
     #[async_trait]
     pub trait ClientMethods {
-        async fn init(wallet_key: &str, api_gateway: &str, onboarding_url: &str) -> BluefinClient;
+        async fn init(
+            wallet_key: &str,
+            api_gateway: &str,
+            onboarding_url: &str,
+            websocket_url: &str,
+            leverage: u128,
+        ) -> BluefinClient;
         async fn onboard(&mut self);
         async fn fetch_markets(&mut self);
         async fn get_user_position(&self, market: &str) -> UserPosition;
@@ -115,22 +139,33 @@ pub mod client {
             reduce_only: bool,
             price: f64,
             quantity: f64,
-            leverage: u128,
+            leverage: Option<u128>,
         ) -> Order;
         fn sign_order(&self, order: Order) -> String;
         async fn post_signed_order(&self, order: Order, signature: String) -> PostResponse;
+
+        // web socket methods
+        async fn listen_to_web_socket(&self);
     }
 
     #[async_trait]
     impl ClientMethods for BluefinClient {
         // creates client object, on-boards the user and fetches market ids
-        async fn init(wallet_key: &str, api_gateway: &str, onboarding_url: &str) -> BluefinClient {
+        async fn init(
+            wallet_key: &str,
+            api_gateway: &str,
+            onboarding_url: &str,
+            websocket_url: &str,
+            leverage: u128,
+        ) -> BluefinClient {
             let mut client = BluefinClient {
                 wallet: create_wallet(wallet_key),
                 api_gateway: api_gateway.to_string(),
                 onboarding_url: onboarding_url.to_string(),
+                websocket_url: websocket_url.to_string(),
                 auth_token: "".to_string(),
                 markets: HashMap::new(),
+                leverage,
             };
 
             // on-boards user on exchange
@@ -249,32 +284,13 @@ pub mod client {
             // assuming the get call did not throw error
             // TODO check for error as well
             if position["userAddress"].is_string() {
-                let ep_str: String =
-                    serde_json::from_str(&position["avgEntryPrice"].to_string()).unwrap();
-                let quantity_str: String =
-                    serde_json::from_str(&position["quantity"].to_string()).unwrap();
-                let margin_str: String =
-                    serde_json::from_str(&position["margin"].to_string()).unwrap();
-
-                let leverage_str: String =
-                    serde_json::from_str(&position["leverage"].to_string()).unwrap();
-
-                let side_str: String = serde_json::from_str(&position["side"].to_string()).unwrap();
-
-                return UserPosition {
-                    symbol: market.to_string(),
-                    side: if side_str == "SELL" { false } else { true },
-                    quantity: quantity_str.parse::<u128>().unwrap(),
-                    entry_price: ep_str.parse::<u128>().unwrap(),
-                    margin: margin_str.parse::<u128>().unwrap(),
-                    leverage: leverage_str.parse::<u128>().unwrap(),
-                };
+                return parse_user_position(position);
             } else {
                 return UserPosition {
                     symbol: market.to_string(),
                     side: false,
                     quantity: 0,
-                    entry_price: 0,
+                    avg_entry_price: 0,
                     margin: 0,
                     leverage: 0,
                 };
@@ -288,11 +304,13 @@ pub mod client {
             reduce_only: bool,
             price: f64,
             quantity: f64,
-            leverage: u128,
+            leverage: Option<u128>,
         ) -> Order {
             // assuming market will exist in markets map
             // TODO add if/else checks
             let market_id = self.markets.get(market).unwrap().to_string();
+
+            let leverage = leverage.unwrap_or_else(|| self.leverage);
 
             return create_limit_ioc_order(
                 self.wallet.address.clone(),
@@ -348,6 +366,86 @@ pub mod client {
                 return PostResponse { error: None };
             }
         }
+
+        async fn listen_to_web_socket(&self) {
+            // helper function to connect with websocket
+            fn connect_socket(
+                url: String,
+                auth_token: String,
+            ) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
+                let (mut bluefin_socket, _) =
+                    connect(url::Url::parse(url.as_str()).unwrap()).expect("Failed to connect");
+
+                info!("Connected to bluefin websocket");
+
+                let request = json!([
+                    "SUBSCRIBE",
+                    [
+                        {
+                            "e": "userUpdates",
+                            "rt": "",
+                            "t": auth_token
+                        }
+                    ]
+                ]);
+
+                // Send message
+                if let Err(err) =
+                    bluefin_socket.send(tungstenite::protocol::Message::Text(request.to_string()))
+                {
+                    error!("Error subscribing to user updates: {err:?}");
+                } else {
+                    info!("Subscribed to user update room");
+                };
+
+                return bluefin_socket;
+            }
+
+            let mut bluefin_socket =
+                connect_socket(self.websocket_url.clone(), self.auth_token.clone());
+
+            println!("Starting to loop!");
+
+            loop {
+                let read = bluefin_socket.read();
+
+                match read {
+                    Ok(message) => {
+                        let msg = match message {
+                            tungstenite::Message::Text(s) => s,
+                            _ => "Error handling message".to_string(),
+                        };
+
+                        // ignore all events except order update and account data update
+                        if !(msg.contains("OrderUpdate") || msg.contains("PositionUpdate")) {
+                            continue;
+                        }
+
+                        // println!("{}", msg);
+
+                        if msg.contains("OrderUpdate") {
+                            let v: Value = serde_json::from_str(&msg).unwrap();
+                            let order_update: OrderUpdate =
+                                serde_json::from_str(&v["data"]["order"].to_string())
+                                    .expect("Can't parse");
+
+                            println!("order_update: {:#?}", order_update);
+                        } else {
+                            let v: Value = serde_json::from_str(&msg).unwrap();
+                            let position_update =
+                                parse_user_position(v["data"]["position"].clone());
+                            println!("position_update: {:#?}", position_update);
+                        };
+                    }
+
+                    Err(e) => {
+                        warn!("Error during message handling: {:?}", e);
+                        bluefin_socket =
+                            connect_socket(self.websocket_url.clone(), self.auth_token.clone())
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -366,6 +464,8 @@ pub mod client {
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
+            "wss://notifications.api.sui-staging.bluefin.io",
+            1,
         )
         .await;
         assert_eq!(
@@ -397,6 +497,8 @@ pub mod client {
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
+            "wss://notifications.api.sui-staging.bluefin.io",
+            1,
         )
         .await;
 
@@ -410,10 +512,13 @@ pub mod client {
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
+            "wss://notifications.api.sui-staging.bluefin.io",
+            1,
         )
         .await;
 
-        let order = bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.1, 0.33, 1);
+        let order =
+            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.1, 0.33, Some(1));
         // println!("{:#?}", order);
         assert_eq!(order.orderType, "LIMIT");
         assert_eq!(order.timeInForce, "IOC");
@@ -429,10 +534,13 @@ pub mod client {
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
+            "wss://notifications.api.sui-staging.bluefin.io",
+            1,
         )
         .await;
 
-        let order = bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.0, 0.33, 1);
+        let order =
+            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.0, 0.33, Some(1));
         let _signature = bluefin_client.sign_order(order);
     }
 
@@ -442,11 +550,13 @@ pub mod client {
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
+            "wss://notifications.api.sui-staging.bluefin.io",
+            1,
         )
         .await;
 
         let order =
-            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 10.0, 1);
+            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 10.0, Some(1));
 
         let signature = bluefin_client.sign_order(order.clone());
         let status = bluefin_client
@@ -461,11 +571,13 @@ pub mod client {
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
+            "wss://notifications.api.sui-staging.bluefin.io",
+            3,
         )
         .await;
 
         let order =
-            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 0.01, 3);
+            bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 0.01, None);
 
         let signature = bluefin_client.sign_order(order.clone());
         let status = bluefin_client
@@ -473,5 +585,19 @@ pub mod client {
             .await;
 
         assert!(status.error.is_none(), "Error while placing order");
+    }
+
+    #[tokio::test]
+    async fn should_connect_bluefin_websocket() {
+        let bluefin_client = BluefinClient::init(
+            "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
+            "https://dapi.api.sui-staging.bluefin.io",
+            "https://testnet.bluefin.io",
+            "wss://notifications.api.sui-staging.bluefin.io",
+            1,
+        )
+        .await;
+
+        let _ = bluefin_client.listen_to_web_socket();
     }
 }
