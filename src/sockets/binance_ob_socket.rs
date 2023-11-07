@@ -1,14 +1,14 @@
+use crate::constants::BINANCE_WS_API;
 use crate::models::binance_models::DepthUpdate;
 use crate::models::common::OrderBook;
-use log::info;
+use log::{info, warn};
 use std::net::TcpStream;
 use std::sync::mpsc;
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
-use crate::constants::BINANCE_WS_API;
 
-pub fn get_binance_ob_socket(_market:&str) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
+pub fn get_binance_ob_socket(_market: &str) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
     let binance_url = format!("{}/ws/{}@depth5@100ms", BINANCE_WS_API, _market);
 
     let (binance_socket, _response) =
@@ -18,7 +18,11 @@ pub fn get_binance_ob_socket(_market:&str) -> tungstenite::WebSocket<MaybeTlsStr
     return binance_socket;
 }
 
-pub fn stream_binance_ob_socket(_market:&str, _tx: mpsc::Sender<(String, OrderBook)>, tx_diff: mpsc::Sender<(String, OrderBook)>) {
+pub fn stream_binance_ob_socket(
+    _market: &str,
+    _tx: mpsc::Sender<(String, OrderBook)>,
+    tx_diff: mpsc::Sender<(String, OrderBook)>,
+) {
     let mut binance_socket = get_binance_ob_socket(_market);
     let mut last_first_ask_price: Option<String> = None;
     let mut last_first_bid_price: Option<String> = None;
@@ -34,7 +38,7 @@ pub fn stream_binance_ob_socket(_market:&str, _tx: mpsc::Sender<(String, OrderBo
                 let msg = match binance_socket_message {
                     tungstenite::Message::Text(s) => s,
                     _ => {
-                        println!("Error getting text");
+                        warn!("Error getting text");
                         continue;
                     }
                 };
@@ -54,10 +58,11 @@ pub fn stream_binance_ob_socket(_market:&str, _tx: mpsc::Sender<(String, OrderBo
                     last_first_bid_price = current_first_bid_price;
 
                     // Send the order book through the channel
-                    tx_diff.send(("binance_ob".to_string(), ob.clone())).unwrap();
+                    tx_diff
+                        .send(("binance_ob".to_string(), ob.clone()))
+                        .unwrap();
                 }
                 _tx.send(("binance_ob".to_string(), ob)).unwrap();
-
             }
             Err(e) => {
                 println!("Error during message handling: {:?}", e);
