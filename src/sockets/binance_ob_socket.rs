@@ -15,8 +15,8 @@ pub struct BinanceOrderBookStream{
 
 impl OrderBookStream for BinanceOrderBookStream
 {
-    fn get_ob_socket(&self, _market: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
-        let url = format!("{}/ws/{}@depth5@100ms", BINANCE_WSS_URL, _market);
+    fn get_ob_socket(&self, market: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
+        let url = format!("{}/ws/{}@depth5@100ms", BINANCE_WSS_URL, market);
 
         let (socket, _response) =
             connect(Url::parse(&url).unwrap()).expect("Can't connect.");
@@ -25,8 +25,8 @@ impl OrderBookStream for BinanceOrderBookStream
         return socket;
     }
 
-    fn stream_ob_socket(&self, _market: &str, _tx: Sender<(String, OrderBook)>, tx_diff: Sender<(String, OrderBook)>) {
-        let mut socket = self.get_ob_socket(_market);
+    fn stream_ob_socket(&self, market: &str, tx: Sender<(String, OrderBook)>, tx_diff: Sender<(String, OrderBook)>) {
+        let mut socket = self.get_ob_socket(market);
         let mut last_first_ask_price: Option<f64> = None;
         let mut last_first_bid_price: Option<f64> = None;
 
@@ -61,14 +61,14 @@ impl OrderBookStream for BinanceOrderBookStream
                         last_first_bid_price = current_first_bid_price;
 
                         // Send the order book through the channel
-                        tx_diff.send(("binance_ob".to_string(), ob.clone())).unwrap();
+                        tx_diff.send(("binance".to_string(), ob.clone())).unwrap();
                     }
-                    _tx.send(("binance_ob".to_string(), ob)).unwrap();
+                    tx.send(("binance".to_string(), ob)).unwrap();
 
                 }
                 Err(e) => {
                     println!("Error during message handling: {:?}", e);
-                    socket =  self.get_ob_socket(_market);
+                    socket =  self.get_ob_socket(market);
                 }
             }
         }

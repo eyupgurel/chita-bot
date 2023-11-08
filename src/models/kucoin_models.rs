@@ -120,3 +120,25 @@ pub struct TickerV2 {
     pub data: TickerData,
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_trade_order_message_deserialization() {
+        use crate::models::kucoin_models::TradeOrderMessage;
+        use std::fs;
+
+        // Read the JSON string from the file
+        let json_str = fs::read_to_string("./src/tests/seed/kucoin/trade-orders-per-market.json")
+            .expect("Unable to read the file");
+
+        // Deserialize the JSON string into TradeOrderMessage struct
+        let parsed_message: TradeOrderMessage =
+            serde_json::from_str(&json_str).expect("Failed to parse the JSON");
+
+        // Print and assert or perform tests as necessary
+        println!("{:?}", parsed_message);
+
+        // Example assertion
+        assert_eq!(parsed_message.message_type, "message");
+    }
+}
