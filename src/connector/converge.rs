@@ -6,7 +6,7 @@ use std::thread;
 use log::debug;
 
 use crate::models::common::OrderBook;
-use crate::sockets::bluefin_ob_socket::stream_bluefin_ob_socket;
+use crate::sockets::bluefin_ob_socket::{BluefinOrderBookStream};
 use crate::sockets::common::OrderBookStream;
 
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
@@ -16,8 +16,8 @@ pub async fn converge() {
     let (tx_kucoin_ticker, rx_kucoin_ticker) = mpsc::channel();
     let (tx_binance_ob, rx_binance_ob) = mpsc::channel();
     let (tx_binance_ob_diff, rx_binance_ob_diff) = mpsc::channel();
-    let (tx_bluefin_ob, _rx_bluefin_ob) = mpsc::channel();
-/*    let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();*/
+    let (tx_bluefin_ob, rx_bluefin_ob) = mpsc::channel();
+    let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
 
     let _handle_kucoin_ob = thread::spawn(move || {
         stream_kucoin_ob_socket("XBTUSDTM", tx_kucoin_ob);
@@ -33,13 +33,13 @@ pub async fn converge() {
     });
 
     let _handle_bluefin_ob = thread::spawn(|| {
-        stream_bluefin_ob_socket("BTC-PERP", tx_bluefin_ob);
+        let ob_stream = BluefinOrderBookStream{};
+        ob_stream.stream_ob_socket("BTC-PERP", tx_bluefin_ob,tx_bluefin_ob_diff);
     });
 
     let mut shared_map: HashMap<String, OrderBook> = HashMap::new();
 
     loop {
-        // Reap results from kucoin
         match rx_kucoin_ob.try_recv() {
             Ok((key, value)) => {
                 shared_map.insert(key, value);
@@ -52,20 +52,6 @@ pub async fn converge() {
             }
         }
 
-        // Reap results from binance
-        match rx_binance_ob.try_recv() {
-            Ok((key, value)) => {
-                shared_map.insert(key, value);
-            }
-            Err(mpsc::TryRecvError::Empty) => {
-                // No message from binance yet
-            }
-            Err(mpsc::TryRecvError::Disconnected) => {
-                panic!("Binance worker has disconnected!");
-            }
-        }
-
-        // Reap results from kucoin
         match rx_kucoin_ticker.try_recv() {
             Ok((_key, value)) => {
                 debug!("value: {:?}", value);
@@ -78,7 +64,19 @@ pub async fn converge() {
             }
         }
 
-        // Reap diff results from binance
+
+        match rx_binance_ob.try_recv() {
+            Ok((key, value)) => {
+                shared_map.insert(key, value);
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                // No message from binance yet
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                panic!("Binance worker has disconnected!");
+            }
+        }
+
         match rx_binance_ob_diff.try_recv() {
             Ok((_key, value)) => {
                 debug!("value: {:?}", value);
@@ -92,9 +90,34 @@ pub async fn converge() {
         }
 
 
-        if shared_map.len() == 2 {
+        match rx_bluefin_ob.try_recv() {
+            Ok((key, value)) => {
+                shared_map.insert(key, value);
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                // No message from binance yet
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                panic!("Bluefin worker has disconnected!");
+            }
+        }
+
+        match rx_bluefin_ob_diff.try_recv() {
+            Ok((_key, value)) => {
+                debug!("value: {:?}", value);
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                // No message from binance yet
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                panic!("Bluefin worker has disconnected!");
+            }
+        }
+
+        if shared_map.len() == 3 {
             let kucoin_ob: &OrderBook;
             let binance_ob: &OrderBook;
+            let bluefin_ob: &OrderBook;
 
             match shared_map.get("kucoin_ob") {
                 Some(_val) => kucoin_ob = _val,
@@ -106,8 +129,9 @@ pub async fn converge() {
                 None => panic!("Key not found"),
             }
 
-            for (i, (ask, size)) in binance_ob.asks.iter().enumerate() {
-                debug!("{}. ask: {}, size: {}", i, ask, size);
+            match shared_map.get("bluefin_ob") {
+                Some(_val) => bluefin_ob = _val,
+                None => panic!("Key not found"),
             }
 
             for (i, ask) in kucoin_ob.asks.iter().enumerate() {
@@ -117,6 +141,23 @@ pub async fn converge() {
             for (i, bid) in kucoin_ob.bids.iter().enumerate() {
                 debug!("{}. bid: {:?}", i, bid);
             }
+
+            for (i, (ask, size)) in binance_ob.asks.iter().enumerate() {
+                debug!("{}. ask: {}, size: {}", i, ask, size);
+            }
+
+            for (i, (bid, size)) in binance_ob.bids.iter().enumerate() {
+                debug!("{}. bid: {}, size: {}", i, bid, size);
+            }
+
+            for (i, (ask, size)) in bluefin_ob.asks.iter().enumerate() {
+                debug!("{}. ask: {}, size: {}", i, ask, size);
+            }
+
+            for (i, (bid, size)) in bluefin_ob.bids.iter().enumerate() {
+                debug!("{}. bid: {}, size: {}", i, bid, size);
+            }
+
         }
     }
 }
