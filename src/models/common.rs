@@ -7,6 +7,56 @@ pub struct OrderBook {
     pub asks: Vec<(f64, f64)>,
     pub bids: Vec<(f64, f64)>,
 }
+
+pub trait BookOperations {
+    fn calculate_mid_prices(&self) -> Vec<f64>;
+    fn bid_shift(&self, shift:f64) -> Vec<f64>;
+    fn ask_shift(&self, shift:f64) -> Vec<f64>;
+}
+
+impl BookOperations for OrderBook {
+    fn calculate_mid_prices(&self) -> Vec<f64> {
+        self.asks.iter()
+            .zip(self.bids.iter())
+            .map(|((ask_price, _), (bid_price, _))| (ask_price + bid_price) / 2.0)
+            .collect()
+    }
+    fn bid_shift(&self, shift:f64) -> Vec<f64> {
+        self.bids.iter()
+            .map(|(_, bid_size)| (bid_size + shift))
+            .collect()
+    }
+    fn ask_shift(&self, shift:f64) -> Vec<f64> {
+        self.bids.iter()
+            .map(|(_, bid_size)| (bid_size + shift))
+            .collect()
+    }
+
+}
+
+pub trait SpreadCalculator {
+    fn calculate_spreads(&self, mid_prices1: &[f64], mid_prices2: &[f64]) -> Vec<f64>;
+}
+
+pub fn add(term: &[f64], summand: &[f64]) -> Vec<f64> {
+    term.iter()
+        .zip(summand.iter())
+        .map(|(&term_item, &summand_item)| term_item + summand_item)
+        .collect()
+}
+pub fn subtract(term: &[f64], minuend: &[f64]) -> Vec<f64> {
+        term.iter()
+        .zip(minuend.iter())
+        .map(|(&term_item, &minuend_item)| term_item - minuend_item)
+        .collect()
+}
+
+pub fn divide(dividend: &[f64], divisor: f64) -> Vec<f64> {
+        dividend.iter()
+        .map(|&dividend_item| dividend_item / divisor)
+        .collect()
+}
+
 pub fn deserialize_as_string_tuples<'de, D>(deserializer: D) -> Result<Vec<(f64, f64)>, D::Error>
     where
         D: Deserializer<'de>,
@@ -27,14 +77,10 @@ pub fn deserialize_as_mix_tuples<'de, D>(deserializer: D) -> Result<Vec<(f64, f6
     where
         D: Deserializer<'de>,
 {
-    // Assuming this visitor is defined somewhere in your code.
     struct StringTupleVisitor;
 
     impl<'de> Visitor<'de> for StringTupleVisitor {
         type Value = Vec<(f64, f64)>;
-
-        // Existing implementation for expecting and visit_seq functions.
-
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             formatter.write_str("a list of price-amount tuples where the amount can be a string or a number")
         }
@@ -60,4 +106,24 @@ pub fn deserialize_as_mix_tuples<'de, D>(deserializer: D) -> Result<Vec<(f64, f6
     }
 
     deserializer.deserialize_seq(StringTupleVisitor)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::models::common::{BookOperations, OrderBook};
+
+    #[test]
+    fn test_mid_prices() {
+        let order_book = OrderBook {
+            asks: vec![(102.0, 10.0), (103.0, 20.0), (104.0, 30.0)],
+            bids: vec![(98.0, 10.0), (97.0, 20.0), (96.0, 30.0)],
+        };
+
+        let mid_prices = order_book.calculate_mid_prices();
+        let expected_mid_prices = vec![100.0, 100.0, 100.0];
+
+        assert_eq!(mid_prices, expected_mid_prices, "The mid prices should be correctly calculated.");
+    }
+
 }

@@ -8,7 +8,8 @@ mod kucoin;
 mod models;
 mod sockets;
 mod tests;
-
+mod constants;
+mod market_maker;
 use bluefin::{BluefinClient, ClientMethods};
 use env::EnvVars;
 
