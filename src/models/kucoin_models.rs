@@ -1,7 +1,6 @@
-use std::fmt;
-use serde::{Deserialize, Deserializer, Serialize};
-use serde::de::{SeqAccess, Visitor};
+use serde::{Deserialize, Serialize};
 use crate::models::common::OrderBook;
+use crate::models::common::deserialize_as_mix_tuples;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,45 +41,13 @@ pub struct Level2Depth {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Level2Data {
-    #[serde(deserialize_with = "deserialize_as_string_tuples")]
-    pub bids: Vec<(String, String)>,
+    #[serde(deserialize_with = "deserialize_as_mix_tuples")]
+    pub bids: Vec<(f64, f64)>,
     pub sequence: u64,
     pub timestamp: u64,
     pub ts: u64,
-    #[serde(deserialize_with = "deserialize_as_string_tuples")]
-    pub asks: Vec<(String, String)>,
-}
-
-
-fn deserialize_as_string_tuples<'de, D>(deserializer: D) -> Result<Vec<(String, String)>, D::Error>
-    where
-        D: Deserializer<'de>,
-{
-    struct StringTupleVisitor;
-
-    impl<'de> Visitor<'de> for StringTupleVisitor {
-        type Value = Vec<(String, String)>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a sequence of sequences")
-        }
-
-        fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
-            where
-                S: SeqAccess<'de>,
-        {
-            let mut values = Vec::new();
-
-            while let Some(sub_seq) = seq.next_element::<(String, f64)>()? {
-                let (s1, s2) = sub_seq;
-                values.push((s1, s2.to_string()));
-            }
-
-            Ok(values)
-        }
-    }
-
-    deserializer.deserialize_seq(StringTupleVisitor)
+    #[serde(deserialize_with = "deserialize_as_mix_tuples")]
+    pub asks: Vec<(f64, f64)>,
 }
 
 impl From<Level2Depth> for OrderBook {

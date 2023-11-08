@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use crate::models::common::OrderBook;
-
+use crate::models::common::deserialize_as_string_tuples;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DepthUpdate {
     #[serde(rename = "e")]
@@ -25,10 +25,12 @@ pub struct DepthUpdate {
     pub pu_id: i64,  // Final update Id in last stream(ie `u` in last stream)
 
     #[serde(rename = "b")]
-    pub bid_orders: Vec<(String, String)>,
+    #[serde(deserialize_with = "deserialize_as_string_tuples")]
+    pub bid_orders: Vec<(f64, f64)>,
 
     #[serde(rename = "a")]
-    pub ask_orders: Vec<(String, String)>,
+    #[serde(deserialize_with = "deserialize_as_string_tuples")]
+    pub ask_orders: Vec<(f64, f64)>,
 }
 
 impl From<DepthUpdate> for OrderBook {
