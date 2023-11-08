@@ -53,8 +53,8 @@ pub async fn converge() {
         }
 
         match rx_kucoin_ticker.try_recv() {
-            Ok((_key, value)) => {
-                debug!("value: {:?}", value);
+            Ok((key, value)) => {
+                debug!("diff of {}: {:?}", key, value);
             }
             Err(mpsc::TryRecvError::Empty) => {
                 // No message from kucoin yet
@@ -78,8 +78,8 @@ pub async fn converge() {
         }
 
         match rx_binance_ob_diff.try_recv() {
-            Ok((_key, value)) => {
-                debug!("value: {:?}", value);
+            Ok((key, value)) => {
+                debug!("diff of {}: {:?}", key, value);
             }
             Err(mpsc::TryRecvError::Empty) => {
                 // No message from binance yet
@@ -103,8 +103,8 @@ pub async fn converge() {
         }
 
         match rx_bluefin_ob_diff.try_recv() {
-            Ok((_key, value)) => {
-                debug!("value: {:?}", value);
+            Ok((key, value)) => {
+                debug!("diff of {}: {:?}", key, value);
             }
             Err(mpsc::TryRecvError::Empty) => {
                 // No message from binance yet

@@ -53,8 +53,8 @@ impl OrderBookStream for BluefinOrderBookStream
 
     fn stream_ob_socket(&self, _market: &str, _tx: Sender<(String, OrderBook)>, tx_diff: Sender<(String, OrderBook)>) {
         let mut socket = self.get_ob_socket(_market);
-        let mut last_first_ask_price: Option<String> = None;
-        let mut last_first_bid_price: Option<String> = None;
+        let mut last_first_ask_price: Option<f64> = None;
+        let mut last_first_bid_price: Option<f64> = None;
 
         loop {
             let socket_message;
