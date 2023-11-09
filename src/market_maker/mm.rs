@@ -4,6 +4,9 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
 use log::debug;
+use crate::constants::{BINANCE_WSS_URL, BLUEFIN_WSS_URL};
+use crate::models::binance_models::DepthUpdate;
+use crate::models::bluefin_models::OrderbookDepthUpdate;
 use crate::sockets::bluefin_ob_socket::{BluefinOrderBookStream};
 use crate::sockets::common::OrderBookStream;
 
@@ -38,13 +41,15 @@ impl MarketMaker for MM {
         });
 
         let _handle_binance_ob = thread::spawn(|| {
-            let ob_stream = BinanceOrderBookStream{};
-            ob_stream.stream_ob_socket("btcusdt", tx_binance_ob, tx_binance_ob_diff);
+            let ob_stream = BinanceOrderBookStream::<DepthUpdate>::new();
+            let market = "btcusdt".to_string();
+            let url = format!("{}/ws/{}@depth5@100ms", BINANCE_WSS_URL, market);
+            ob_stream.stream_ob_socket(&url ,&market, tx_binance_ob, tx_binance_ob_diff);
         });
 
         let _handle_bluefin_ob = thread::spawn(|| {
-            let ob_stream = BluefinOrderBookStream{};
-            ob_stream.stream_ob_socket("BTC-PERP", tx_bluefin_ob,tx_bluefin_ob_diff);
+            let ob_stream = BluefinOrderBookStream::<OrderbookDepthUpdate>::new();
+            ob_stream.stream_ob_socket(&BLUEFIN_WSS_URL, "BTC-PERP", tx_bluefin_ob,tx_bluefin_ob_diff);
         });
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();

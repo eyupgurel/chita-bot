@@ -2,22 +2,30 @@ use crate::models::common::OrderBook;
 use log::info;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
+use serde::de::DeserializeOwned;
 use tungstenite::{connect, WebSocket};
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
-use crate::constants::BINANCE_WSS_URL;
-use crate::models::binance_models::DepthUpdate;
 use crate::sockets::common::OrderBookStream;
 
-pub struct BinanceOrderBookStream{
-
+pub struct BinanceOrderBookStream<T> {
+    phantom: std::marker::PhantomData<T>, // Use PhantomData to indicate the generic type usage
 }
 
-impl OrderBookStream for BinanceOrderBookStream
-{
-    fn get_ob_socket(&self, market: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
-        let url = format!("{}/ws/{}@depth5@100ms", BINANCE_WSS_URL, market);
+impl<T> BinanceOrderBookStream<T> {
+    pub fn new() -> Self {
+        BinanceOrderBookStream {
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
 
+// Implement OrderBookStream for any type T that meets the trait bounds
+impl<T> OrderBookStream for BinanceOrderBookStream<T>
+    where
+        T: DeserializeOwned + Into<OrderBook>,
+{
+    fn get_ob_socket(&self, url:&str, _market:&str) -> WebSocket<MaybeTlsStream<TcpStream>> {
         let (socket, _response) =
             connect(Url::parse(&url).unwrap()).expect("Can't connect.");
 
@@ -25,8 +33,8 @@ impl OrderBookStream for BinanceOrderBookStream
         return socket;
     }
 
-    fn stream_ob_socket(&self, market: &str, tx: Sender<(String, OrderBook)>, tx_diff: Sender<(String, OrderBook)>) {
-        let mut socket = self.get_ob_socket(market);
+    fn stream_ob_socket(&self, url:&str, market:&str, tx: Sender<(String, OrderBook)>, tx_diff: Sender<(String, OrderBook)>) {
+        let mut socket = self.get_ob_socket(url, market);
         let mut last_first_ask_price: Option<f64> = None;
         let mut last_first_bid_price: Option<f64> = None;
 
@@ -46,7 +54,7 @@ impl OrderBookStream for BinanceOrderBookStream
                         }
                     };
 
-                    let parsed: DepthUpdate = serde_json::from_str(&msg).expect("Can't parse");
+                    let parsed: T = serde_json::from_str(&msg).expect("Can't parse");
                     let ob: OrderBook = parsed.into();
 
                     let current_first_ask_price = ob.asks.first().map(|ask| ask.0.clone());
@@ -68,7 +76,7 @@ impl OrderBookStream for BinanceOrderBookStream
                 }
                 Err(e) => {
                     println!("Error during message handling: {:?}", e);
-                    socket =  self.get_ob_socket(market);
+                    socket =  self.get_ob_socket(url, market);
                 }
             }
         }

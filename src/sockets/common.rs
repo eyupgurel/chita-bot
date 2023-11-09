@@ -4,6 +4,6 @@ use std::sync::mpsc;
 use tungstenite::stream::MaybeTlsStream;
 
 pub trait OrderBookStream{
-    fn get_ob_socket(&self, _market:&str) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>>;
-    fn stream_ob_socket(&self, _market:&str, _tx: mpsc::Sender<(String, OrderBook)>, tx_diff: mpsc::Sender<(String, OrderBook)>);
+    fn get_ob_socket(&self, url:&str, market:&str) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>>;
+    fn stream_ob_socket(&self, url:&str, market:&str, tx: mpsc::Sender<(String, OrderBook)>, tx_diff: mpsc::Sender<(String, OrderBook)>);
 }
