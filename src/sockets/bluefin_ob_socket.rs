@@ -62,7 +62,7 @@ impl<T> OrderBookStream for BluefinOrderBookStream<T>
         return socket;
     }
 
-    fn stream_ob_socket(&self, url: &str, market: &str, tx: Sender<(String, OrderBook)>, tx_diff: Sender<(String, OrderBook)>) {
+    fn stream_ob_socket(&self, url: &str, market: &str, tx: Sender<OrderBook>, tx_diff: Sender<OrderBook>) {
         let mut socket = self.get_ob_socket(url, market);
         let mut last_first_ask_price: Option<f64> = None;
         let mut last_first_bid_price: Option<f64> = None;
@@ -107,9 +107,9 @@ impl<T> OrderBookStream for BluefinOrderBookStream<T>
                         last_first_bid_price = current_first_bid_price;
 
                         // Send the order book through the channel
-                        tx_diff.send(("bluefin".to_string(), ob.clone())).unwrap();
+                        tx_diff.send( ob.clone()).unwrap();
                     }
-                    tx.send(("bluefin".to_string(), ob)).unwrap();
+                    tx.send(ob).unwrap();
                 }
                 Err(e) => {
                     println!("Error during message handling: {:?}", e);

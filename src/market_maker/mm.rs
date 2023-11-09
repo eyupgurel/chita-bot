@@ -88,8 +88,8 @@ impl MarketMaker for MM {
 
 
             match rx_binance_ob.try_recv() {
-                Ok((key, value)) => {
-                    ob_map.insert(key.to_string(), value);
+                Ok(value) => {
+                    ob_map.insert("binance".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
@@ -100,15 +100,15 @@ impl MarketMaker for MM {
             }
 
             match rx_binance_ob_diff.try_recv() {
-                Ok((key, value)) => {
-                    debug!("diff of {}: {:?}", key, value);
+                Ok(value) => {
+                    debug!("diff of binance ob: {:?}", value);
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
                         let mm = self.create_mm_pair(&value, mm_ob, tkr_ob, -0.1);
                         debug!("orders: {:?}", mm);
                     }
-                    ob_map.insert(key.to_string(), value);
+                    ob_map.insert("binance".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
@@ -120,8 +120,8 @@ impl MarketMaker for MM {
 
 
             match rx_bluefin_ob.try_recv() {
-                Ok((key, value)) => {
-                    ob_map.insert(key.to_string(), value);
+                Ok(value) => {
+                    ob_map.insert("bluefin".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
@@ -132,15 +132,15 @@ impl MarketMaker for MM {
             }
 
             match rx_bluefin_ob_diff.try_recv() {
-                Ok((key, value)) => {
-                    debug!("diff of {}: {:?}", key, value);
+                Ok( value) => {
+                    debug!("diff of bluefin ob: {:?}", value);
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let mm = self.create_mm_pair(ref_ob, mm_ob, &value, -0.1);
                         debug!("orders {:?}", mm);
                     }
-                    ob_map.insert(key.to_string(), value);
+                    ob_map.insert("bluefin".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
