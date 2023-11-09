@@ -9,6 +9,9 @@ pub struct EnvVars {
     pub bluefin_endpoint: String,
     pub bluefin_wallet_key: String,
     pub bluefin_leverage: u128,
+    pub kukoin_on_boarding_url: String,
+    pub kucoin_websocket_url: String,
+    pub kucoin_endpoint: String,
     pub log_level: String,
 }
 
@@ -19,6 +22,7 @@ pub struct EnvVars {
 pub fn env_variables() -> EnvVars {
     dotenv().ok();
 
+    // bluefin vars
     let bluefin_on_boarding_url =
         std::env::var("BLUEFIN_ON_BOARDING_URL").expect("BLUEFIN_ON_BOARDING_URL must be set.");
     let bluefin_endpoint =
@@ -31,6 +35,14 @@ pub fn env_variables() -> EnvVars {
         .expect("BLUEFIN_LEVERAGE must be set.")
         .parse::<u128>()
         .unwrap();
+    // kucoin vars
+    let kukoin_on_boarding_url =
+        std::env::var("KUCOIN_ON_BOARDING_URL").expect("KUCOIN_ON_BOARDING_URL must be set.");
+    let kucoin_websocket_url =
+        std::env::var("KUCOIN_WEB_SOCKET_URL").expect("KUCOIN_WEB_SOCKET_URL must be set.");
+    let kucoin_endpoint = std::env::var("KUCOIN_ENDPOINT").expect("KUCOIN_ENDPOINT must be set.");
+
+    // misc
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
 
     return EnvVars {
@@ -39,6 +51,9 @@ pub fn env_variables() -> EnvVars {
         bluefin_wallet_key,
         bluefin_websocket_url,
         bluefin_leverage,
+        kukoin_on_boarding_url,
+        kucoin_endpoint,
+        kucoin_websocket_url,
         log_level,
     };
 }
