@@ -38,7 +38,6 @@ pub mod client {
     }
 
     #[derive(Deserialize, Debug)]
-    #[serde(rename_all = "camelCase")]
     pub struct UserPosition {
         pub symbol: String,
         pub side: bool,
@@ -55,6 +54,15 @@ pub mod client {
         pub address: String,
     }
 
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct OrderUpdate {
+        pub hash: String,
+        pub symbol: String,
+        pub order_status: String,
+        pub cancel_reason: String,
+    }
+
     pub struct BluefinClient {
         wallet: Wallet,
         api_gateway: String,
@@ -63,15 +71,6 @@ pub mod client {
         auth_token: String,
         leverage: u128,
         markets: HashMap<String, String>,
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all = "camelCase")]
-    pub struct OrderUpdate {
-        pub hash: String,
-        pub symbol: String,
-        pub order_status: String,
-        pub cancel_reason: String,
     }
 
     /**
