@@ -1,4 +1,4 @@
-use crate::connector::converge::converge;
+use std::thread;
 
 mod bluefin;
 mod connector;
@@ -12,6 +12,7 @@ mod constants;
 mod market_maker;
 use bluefin::{BluefinClient, ClientMethods};
 use env::EnvVars;
+use crate::market_maker::mm::{MarketMaker, MM};
 
 #[tokio::main]
 async fn main() {
@@ -29,10 +30,14 @@ async fn main() {
     )
     .await;
 
+    // start connector
+    let handle_mm = thread::spawn(move || {
+        MM{}.connect();
+    });
+
     // start bluefin event listener
-    // this will block the main thread and converge method will never run!
     client.listen_to_web_socket().await;
 
-    // start connector
-    converge().await;
+    handle_mm.join().expect("market maker thread failed to join main");
+
 }
