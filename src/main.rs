@@ -1,14 +1,12 @@
 use std::thread;
 
 mod bluefin;
-mod connector;
 mod constants;
 mod env;
 mod kucoin;
 mod models;
 mod sockets;
 mod tests;
-mod constants;
 mod market_maker;
 use bluefin::{BluefinClient, ClientMethods};
 use env::EnvVars;
