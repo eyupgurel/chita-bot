@@ -9,60 +9,18 @@ pub mod client {
 
     use blake2b_simd::Params;
     use ed25519_dalek::*;
-    use serde::Deserialize;
     use serde_json::{json, Value};
     use sha256::digest;
     use std::collections::HashMap;
 
     // custom modules
     use crate::bluefin::{
+        models::{
+            parse_user_position, Auth, Error, OrderUpdate, PostResponse, UserPosition, Wallet,
+        },
         orders::{create_limit_ioc_order, to_order_request, Order},
-        parser::parse_user_position,
     };
     use tungstenite::stream::MaybeTlsStream;
-
-    #[derive(Deserialize, Debug)]
-    pub struct Auth {
-        pub token: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    pub struct Error {
-        pub code: u64,
-        pub message: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    pub struct PostResponse {
-        pub error: Option<Error>,
-    }
-
-    #[derive(Deserialize, Debug)]
-    pub struct UserPosition {
-        pub symbol: String,
-        pub side: bool,
-        pub avg_entry_price: u128,
-        pub quantity: u128,
-        pub margin: u128,
-        pub leverage: u128,
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct Wallet {
-        pub signing_key: SigningKey,
-        pub public_key: String,
-        pub address: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all = "camelCase")]
-    pub struct OrderUpdate {
-        pub hash: String,
-        pub symbol: String,
-        pub order_status: String,
-        pub cancel_reason: String,
-    }
-
     pub struct BluefinClient {
         wallet: Wallet,
         api_gateway: String,

@@ -1,12 +1,12 @@
 use crate::models::common::OrderBook;
+use crate::sockets::common::OrderBookStream;
 use log::info;
+use serde::de::DeserializeOwned;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
-use serde::de::DeserializeOwned;
-use tungstenite::{connect, WebSocket};
 use tungstenite::stream::MaybeTlsStream;
+use tungstenite::{connect, WebSocket};
 use url::Url;
-use crate::sockets::common::OrderBookStream;
 
 pub struct BinanceOrderBookStream<T> {
     phantom: std::marker::PhantomData<T>, // Use PhantomData to indicate the generic type usage
@@ -22,18 +22,23 @@ impl<T> BinanceOrderBookStream<T> {
 
 // Implement OrderBookStream for any type T that meets the trait bounds
 impl<T> OrderBookStream<T> for BinanceOrderBookStream<T>
-    where
-        T: DeserializeOwned + Into<OrderBook>,
+where
+    T: DeserializeOwned + Into<OrderBook>,
 {
-    fn get_ob_socket(&self, url:&str, _market:&str) -> WebSocket<MaybeTlsStream<TcpStream>> {
-        let (socket, _response) =
-            connect(Url::parse(&url).unwrap()).expect("Can't connect.");
+    fn get_ob_socket(&self, url: &str, _market: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
+        let (socket, _response) = connect(Url::parse(&url).unwrap()).expect("Can't connect.");
 
         info!("Connected to binance stream.");
         return socket;
     }
 
-    fn stream_ob_socket(&self, url:&str, market:&str, tx: Sender<OrderBook>, tx_diff: Sender<OrderBook>) {
+    fn stream_ob_socket(
+        &self,
+        url: &str,
+        market: &str,
+        tx: Sender<OrderBook>,
+        tx_diff: Sender<OrderBook>,
+    ) {
         let mut socket = self.get_ob_socket(url, market);
         let mut last_first_ask_price: Option<f64> = None;
         let mut last_first_bid_price: Option<f64> = None;
@@ -60,8 +65,10 @@ impl<T> OrderBookStream<T> for BinanceOrderBookStream<T>
                     let current_first_ask_price = ob.asks.first().map(|ask| ask.0.clone());
                     let current_first_bid_price = ob.bids.first().map(|bid| bid.0.clone());
 
-                    let is_first_ask_price_changed = current_first_ask_price != last_first_ask_price;
-                    let is_first_bid_price_changed = current_first_bid_price != last_first_bid_price;
+                    let is_first_ask_price_changed =
+                        current_first_ask_price != last_first_ask_price;
+                    let is_first_bid_price_changed =
+                        current_first_bid_price != last_first_bid_price;
 
                     if is_first_ask_price_changed || is_first_bid_price_changed {
                         // Update the last known prices
@@ -72,11 +79,10 @@ impl<T> OrderBookStream<T> for BinanceOrderBookStream<T>
                         tx_diff.send(ob.clone()).unwrap();
                     }
                     tx.send(ob).unwrap();
-
                 }
                 Err(e) => {
                     println!("Error during message handling: {:?}", e);
-                    socket =  self.get_ob_socket(url, market);
+                    socket = self.get_ob_socket(url, market);
                 }
             }
         }

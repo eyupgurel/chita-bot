@@ -1,31 +1,31 @@
 pub mod client {
-    use crate::utils;
-    use async_trait::async_trait;
+    use crate::{kucoin::models::UserPosition, utils};
+    #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
-    use log::{debug, error, info, warn};
+    use log::info;
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-    use serde_json::json;
+    use serde_json::{json, Value};
     use sha2::Sha256;
     use std::collections::HashMap;
-    use std::net::TcpStream;
     use std::time::Duration;
-    use tungstenite::connect;
 
+    #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
 
-    use crate::kucoin::models::{Method, Response};
+    use crate::kucoin::models::{Error, Method, Response};
 
     #[derive(Debug, Clone)]
-    pub struct CredentialsV2 {
+    pub struct Credentials {
         pub api_key: String,
         pub secret_key: String,
         pub passphrase: String,
     }
 
-    impl CredentialsV2 {
+    impl Credentials {
+        #[allow(unused)]
         pub fn new(api_key: &str, secret_key: &str, passphrase: &str) -> Self {
-            CredentialsV2 {
+            Credentials {
                 api_key: api_key.to_string(),
                 secret_key: secret_key.to_string(),
                 passphrase: passphrase.to_string(),
@@ -33,19 +33,23 @@ pub mod client {
         }
     }
 
+    #[allow(unused)]
     pub struct KuCoinClient {
-        credentials: CredentialsV2,
+        credentials: Credentials,
         api_gateway: String,
+        #[allow(unused)]
         onboarding_url: String,
+        #[allow(unused)]
         websocket_url: String,
         client: reqwest::Client,
         leverage: u128,
         markets: HashMap<String, String>,
     }
 
+    #[allow(unused)]
     impl KuCoinClient {
         async fn new(
-            credentials: CredentialsV2,
+            credentials: Credentials,
             api_gateway: &str,
             onboarding_url: &str,
             websocket_url: &str,
@@ -94,15 +98,46 @@ pub mod client {
             return resp.data.token;
         }
 
-        async fn place_limit_order(&self, market: &str, is_buy: bool, price: f64, quantity: f64) {
+        async fn get_position(&self, market: &str) -> UserPosition {
+            let endpoint = String::from("/api/v1/position");
+            let market_symbol = self.markets.get(market).unwrap();
+
+            let mut params: HashMap<String, String> = HashMap::new();
+            params.insert(String::from("symbol"), market_symbol.clone());
+            let query = utils::format_query(&params);
+
+            let url: String = format!("{}{}{}", &self.api_gateway, endpoint, query);
+
+            let headers: HeaderMap =
+                self.sign_headers(endpoint.clone(), None, Some(query), Method::GET);
+
+            let res = self
+                .client
+                .get(url)
+                .headers(headers)
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap();
+
+            let position: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            let user_position: UserPosition =
+                serde_json::from_value(position["data"].clone()).unwrap();
+
+            println!("Got position: {:#?}", user_position);
+            return user_position;
+        }
+
+        async fn place_limit_order(&self, market: &str, is_buy: bool, price: f64, quantity: u128) {
             let endpoint = String::from("/api/v1/orders");
 
             let url: String = format!("{}{}", &self.api_gateway, endpoint);
-            println!("url: {}", url);
 
             let side = if is_buy { "buy" } else { "sell" };
             let market_symbol = self.markets.get(market).unwrap();
-            println!("market_symbol: {}", market_symbol);
 
             let oid = utils::get_random_string();
             let mut params: HashMap<String, String> = HashMap::new();
@@ -112,11 +147,10 @@ pub mod client {
             params.insert(String::from("price"), price.to_string());
             params.insert(String::from("size"), quantity.to_string());
             params.insert(String::from("leverage"), self.leverage.to_string());
+            params.insert(String::from("postOnly"), "true".to_string());
 
             let headers: HeaderMap =
                 self.sign_headers(endpoint.clone(), Some(&params), None, Method::POST);
-
-            println!("Headers: {:#?}", headers);
 
             let res = self
                 .client
@@ -124,9 +158,20 @@ pub mod client {
                 .headers(headers)
                 .json(&json!(params))
                 .send()
-                .await;
+                .await
+                .unwrap();
 
             println!("Response: {:#?}", res);
+
+            if res.status().is_success() {
+                let response_body = res.text().await.unwrap();
+                println!("Futures order placed successfully: {}", response_body);
+            } else {
+                let error: Error =
+                    serde_json::from_str(&res.text().await.unwrap()).expect("JSON Decoding failed");
+
+                eprintln!("Error placing futures order: {:#?}", error);
+            }
         }
 
         pub fn sign_headers(
@@ -137,7 +182,7 @@ pub mod client {
             method: Method,
         ) -> HeaderMap {
             let mut headers = HeaderMap::new();
-            let nonce = utils::get_time().to_string();
+            let nonce = utils::get_current_time().to_string();
             let mut str_to_sign: String = String::new();
 
             match method {
@@ -178,6 +223,7 @@ pub mod client {
             hmac_sign.input(str_to_sign.as_bytes());
             let sign_result = hmac_sign.result();
             let sign_bytes = sign_result.code();
+            #[allow(deprecated)]
             let sign_digest = encode(&sign_bytes);
             let mut hmac_passphrase =
                 HmacSha256::new_varkey(self.credentials.secret_key.as_str().as_bytes())
@@ -185,6 +231,7 @@ pub mod client {
             hmac_passphrase.input(self.credentials.passphrase.as_str().as_bytes());
             let passphrase_result = hmac_passphrase.result();
             let passphrase_bytes = passphrase_result.code();
+            #[allow(deprecated)]
             let passphrase_digest = encode(&passphrase_bytes);
             headers.insert(
                 HeaderName::from_static("kc-api-key"),
@@ -212,7 +259,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_create_kucoin_client() {
-        let credentials = CredentialsV2::new("key", "secret", "phrase");
+        let credentials = Credentials::new("key", "secret", "phrase");
 
         let _ = KuCoinClient::new(
             credentials,
@@ -225,5 +272,46 @@ pub mod client {
     }
 
     #[tokio::test]
-    async fn should_post_order_on_kucoin() {}
+    async fn should_get_user_position_on_kucoin() {
+        let credentials: Credentials = Credentials::new(
+            "654bad2744b9f1000170a857",
+            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
+            "6aabPMdj!!4Xt3Y&",
+        );
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        )
+        .await;
+
+        client.get_position("ETH-PERP").await;
+
+        assert!(true, "Error while placing order");
+    }
+
+    #[tokio::test]
+    async fn should_post_order_on_kucoin() {
+        let credentials = Credentials::new(
+            "654bad2744b9f1000170a857",
+            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
+            "6aabPMdj!!4Xt3Y&",
+        );
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        )
+        .await;
+
+        client.place_limit_order("ETH-PERP", true, 1700.0, 1).await;
+
+        assert!(true, "Error while placing order");
+    }
 }

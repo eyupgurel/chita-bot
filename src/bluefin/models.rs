@@ -1,6 +1,48 @@
+use ed25519_dalek::*;
+use serde::Deserialize;
 use serde_json::Value;
 
-use super::client::client::UserPosition;
+#[derive(Deserialize, Debug)]
+pub struct Auth {
+    pub token: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Error {
+    pub code: u64,
+    pub message: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PostResponse {
+    pub error: Option<Error>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UserPosition {
+    pub symbol: String,
+    pub side: bool,
+    pub avg_entry_price: u128,
+    pub quantity: u128,
+    pub margin: u128,
+    pub leverage: u128,
+}
+
+#[derive(Debug, Clone)]
+pub struct Wallet {
+    pub signing_key: SigningKey,
+    pub public_key: String,
+    pub address: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderUpdate {
+    pub hash: String,
+    pub symbol: String,
+    pub order_status: String,
+    pub cancel_reason: String,
+}
 
 pub fn parse_user_position(position: Value) -> UserPosition {
     let ep_str: String = serde_json::from_str(&position["avgEntryPrice"].to_string()).unwrap();

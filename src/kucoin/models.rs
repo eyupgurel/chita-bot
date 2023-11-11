@@ -23,6 +23,26 @@ pub struct Response {
     pub data: Data,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct Error {
+    pub code: String,
+    pub msg: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UserPosition {
+    pub symbol: String,
+    // pub side: bool,
+    #[serde(rename = "avgEntryPrice")]
+    pub avg_entry_price: u128,
+
+    #[serde(rename = "currentQty")]
+    pub quantity: u128,
+    // pub margin: u128,
+    #[serde(rename = "realLeverage")]
+    pub leverage: u128,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Method {

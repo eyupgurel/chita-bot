@@ -1,6 +1,6 @@
 // modules
 mod client;
+mod models;
 mod orders;
-mod parser;
 
 pub use crate::bluefin::client::client::{BluefinClient, ClientMethods};
