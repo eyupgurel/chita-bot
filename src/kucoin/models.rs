@@ -22,3 +22,12 @@ pub struct Response {
     pub code: String,
     pub data: Data,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Method {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+}

@@ -17,7 +17,7 @@ pub mod client {
     // custom modules
     use crate::bluefin::{
         orders::{create_limit_ioc_order, to_order_request, Order},
-        utils::parse_user_position,
+        parser::parse_user_position,
     };
     use tungstenite::stream::MaybeTlsStream;
 
@@ -258,7 +258,7 @@ pub mod client {
         }
 
         async fn get_user_position(&self, market: &str) -> UserPosition {
-            let client = reqwest::Client::new();
+            let client: reqwest::Client = reqwest::Client::new();
             let query = vec![("symbol", market)];
 
             let res = client

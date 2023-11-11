@@ -1,18 +1,17 @@
 use std::thread;
 
 mod bluefin;
-mod connector;
 mod constants;
 mod env;
 mod kucoin;
+mod market_maker;
 mod models;
 mod sockets;
 mod tests;
-mod constants;
-mod market_maker;
+mod utils;
+use crate::market_maker::mm::{MarketMaker, MM};
 use bluefin::{BluefinClient, ClientMethods};
 use env::EnvVars;
-use crate::market_maker::mm::{MarketMaker, MM};
 
 #[tokio::main]
 async fn main() {
@@ -32,12 +31,13 @@ async fn main() {
 
     // start connector
     let handle_mm = thread::spawn(move || {
-        MM{}.connect();
+        MM {}.connect();
     });
 
     // start bluefin event listener
     client.listen_to_web_socket().await;
 
-    handle_mm.join().expect("market maker thread failed to join main");
-
+    handle_mm
+        .join()
+        .expect("market maker thread failed to join main");
 }
