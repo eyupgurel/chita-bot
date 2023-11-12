@@ -283,11 +283,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_get_user_position_on_kucoin() {
-        let credentials: Credentials = Credentials::new(
-            "654bad2744b9f1000170a857",
-            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
-            "6aabPMdj!!4Xt3Y&",
-        );
+        let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
             credentials,
@@ -305,11 +301,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_post_order_on_kucoin() {
-        let credentials = Credentials::new(
-            "654bad2744b9f1000170a857",
-            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
-            "6aabPMdj!!4Xt3Y&",
-        );
+        let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
             credentials,
@@ -327,11 +319,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_place_order_on_sui() {
-        let credentials = Credentials::new(
-            "654bad2744b9f1000170a857",
-            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
-            "6aabPMdj!!4Xt3Y&",
-        );
+        let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
             credentials,
