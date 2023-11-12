@@ -30,8 +30,9 @@ pub struct Error {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct PostOrderResponse {
+pub struct CallResponse {
     pub error: Option<Error>,
+    pub order_id: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
