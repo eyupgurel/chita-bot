@@ -135,7 +135,7 @@ pub mod client {
             return user_position;
         }
 
-        async fn place_limit_order(
+        pub async fn place_limit_order(
             &self,
             market: &str,
             is_buy: bool,
@@ -149,9 +149,8 @@ pub mod client {
             let side = if is_buy { "buy" } else { "sell" };
             let market_symbol = self.markets.get(market).unwrap();
 
-            let oid = utils::get_random_string();
             let mut params: HashMap<String, String> = HashMap::new();
-            params.insert(String::from("clientOid"), oid.clone());
+            params.insert(String::from("clientOid"), utils::get_random_string());
             params.insert(String::from("symbol"), market_symbol.to_string());
             params.insert(String::from("side"), side.to_string());
             params.insert(String::from("price"), price.to_string());
@@ -172,11 +171,14 @@ pub mod client {
                 .unwrap();
 
             if res.status().is_success() {
-                let response_body = res.text().await.unwrap();
-                println!("Futures order placed successfully: {}", response_body);
+                let response_body: String = res.text().await.unwrap();
+                info!("Futures order placed successfully: {}", response_body);
+                let value: Value =
+                    serde_json::from_str(&response_body).expect("JSON Decoding failed");
+
                 return CallResponse {
                     error: None,
-                    order_id: Some(oid.clone()),
+                    order_id: Some(value["data"]["orderId"].to_string()),
                 };
             } else {
                 let error: Error =
@@ -190,7 +192,7 @@ pub mod client {
             }
         }
 
-        async fn cancel_order_by_id(&self, order_id: &str) -> CallResponse {
+        pub async fn cancel_order_by_id(&self, order_id: &str) -> CallResponse {
             let endpoint = format!("/api/v1/orders/{}", order_id);
             let url = format!("{}{}", &self.api_gateway, endpoint);
 
@@ -222,7 +224,7 @@ pub mod client {
             }
         }
 
-        async fn cancel_order_by_market(&self, market: &str) -> CallResponse {
+        pub async fn cancel_order_by_market(&self, market: &str) -> CallResponse {
             let endpoint = String::from("/api/v1/orders");
             let mut params: HashMap<String, String> = HashMap::new();
 
@@ -244,6 +246,7 @@ pub mod client {
 
             if resp.status().is_success() {
                 let response_body = resp.text().await.unwrap();
+                println!("{:#?}", response_body);
                 println!("Order successfully cancelled for market: {}", market);
                 return CallResponse {
                     error: None,
@@ -391,7 +394,9 @@ pub mod client {
         )
         .await;
 
-        let _resp = client.place_limit_order("SUI-PERP", true, 0.58, 1).await;
+        let resp: CallResponse = client.place_limit_order("SUI-PERP", true, 0.58, 1).await;
+
+        println!("Placed order with id: {}", resp.order_id.unwrap());
 
         assert!(true, "Error while placing order");
     }
@@ -427,7 +432,7 @@ pub mod client {
         )
         .await;
 
-        client.cancel_order_by_market("ETH-PERP").await;
+        client.cancel_order_by_market("SUI-PERP").await;
 
         assert!(true, "Error cancelling the order");
     }
