@@ -1,5 +1,8 @@
 pub mod client {
-    use crate::{kucoin::models::UserPosition, utils};
+    use crate::{
+        kucoin::models::{PostOrderResponse, UserPosition},
+        utils,
+    };
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
@@ -48,7 +51,7 @@ pub mod client {
 
     #[allow(unused)]
     impl KuCoinClient {
-        async fn new(
+        pub async fn new(
             credentials: Credentials,
             api_gateway: &str,
             onboarding_url: &str,
@@ -58,6 +61,7 @@ pub mod client {
             let mut markets: HashMap<String, String> = HashMap::new();
             markets.insert("ETH-PERP".to_string(), "ETHUSDTM".to_string());
             markets.insert("BTC-PERP".to_string(), "BTCUSDTM".to_string());
+            markets.insert("SUI-PERP".to_string(), "SUIUSDTM".to_string());
 
             let client = reqwest::Client::builder()
                 .timeout(Duration::from_secs(60))
@@ -79,7 +83,7 @@ pub mod client {
             return kucoin_client;
         }
 
-        async fn get_token(onboarding_url: &str) -> String {
+        pub async fn get_token(onboarding_url: &str) -> String {
             let client = reqwest::Client::new();
 
             let resp: Response = serde_json::from_str(
@@ -98,7 +102,7 @@ pub mod client {
             return resp.data.token;
         }
 
-        async fn get_position(&self, market: &str) -> UserPosition {
+        pub async fn get_position(&self, market: &str) -> UserPosition {
             let endpoint = String::from("/api/v1/position");
             let market_symbol = self.markets.get(market).unwrap();
 
@@ -131,7 +135,13 @@ pub mod client {
             return user_position;
         }
 
-        async fn place_limit_order(&self, market: &str, is_buy: bool, price: f64, quantity: u128) {
+        pub async fn place_limit_order(
+            &self,
+            market: &str,
+            is_buy: bool,
+            price: f64,
+            quantity: u128,
+        ) -> PostOrderResponse {
             let endpoint = String::from("/api/v1/orders");
 
             let url: String = format!("{}{}", &self.api_gateway, endpoint);
@@ -161,16 +171,16 @@ pub mod client {
                 .await
                 .unwrap();
 
-            println!("Response: {:#?}", res);
-
             if res.status().is_success() {
                 let response_body = res.text().await.unwrap();
                 println!("Futures order placed successfully: {}", response_body);
+                return PostOrderResponse { error: None };
             } else {
                 let error: Error =
                     serde_json::from_str(&res.text().await.unwrap()).expect("JSON Decoding failed");
 
                 eprintln!("Error placing futures order: {:#?}", error);
+                return PostOrderResponse { error: Some(error) };
             }
         }
 
@@ -311,6 +321,28 @@ pub mod client {
         .await;
 
         client.place_limit_order("ETH-PERP", true, 1700.0, 1).await;
+
+        assert!(true, "Error while placing order");
+    }
+
+    #[tokio::test]
+    async fn should_place_order_on_sui() {
+        let credentials = Credentials::new(
+            "654bad2744b9f1000170a857",
+            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
+            "6aabPMdj!!4Xt3Y&",
+        );
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        )
+        .await;
+
+        client.place_limit_order("SUI-PERP", false, 0.58, 1).await;
 
         assert!(true, "Error while placing order");
     }

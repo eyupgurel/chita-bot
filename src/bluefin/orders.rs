@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use sha256::digest;
 use web3_unit_converter::Unit;
@@ -140,7 +141,6 @@ pub fn get_serialized_order(order: &Order) -> String {
 // ----------------------------------------------------------------------------------- //
 //                                   PUBLIC METHODS                                    //
 // ----------------------------------------------------------------------------------- //
-
 pub fn create_limit_ioc_order(
     wallet_address: String,
     market_name: String,

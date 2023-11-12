@@ -10,7 +10,7 @@ mod sockets;
 mod tests;
 mod utils;
 use crate::market_maker::mm::{MarketMaker, MM};
-use bluefin::{BluefinClient, ClientMethods};
+use bluefin::BluefinClient;
 use env::EnvVars;
 
 #[tokio::main]
@@ -20,7 +20,7 @@ async fn main() {
     env::init_logger(vars.log_level);
 
     // create bluefin client
-    let client = BluefinClient::init(
+    let client = BluefinClient::new(
         &vars.bluefin_wallet_key,
         &vars.bluefin_endpoint,
         &vars.bluefin_on_boarding_url,

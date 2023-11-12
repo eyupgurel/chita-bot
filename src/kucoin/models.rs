@@ -30,6 +30,11 @@ pub struct Error {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct PostOrderResponse {
+    pub error: Option<Error>,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct UserPosition {
     pub symbol: String,
     // pub side: bool,

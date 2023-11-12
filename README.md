@@ -12,3 +12,8 @@
     | `cargo test`               | Run tests             |
     | `cargo test -- --nocapture`| Run tests with output |
     | `cargo watch --exec test`  | Watch tests           |
+
+## Error codes:
+### Kucoin:
+- 300003: Insufficient Balance
+- 300012: Market bound exceeded
