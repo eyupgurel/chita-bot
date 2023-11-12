@@ -1,9 +1,9 @@
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use sha256::digest;
 use web3_unit_converter::Unit;
 
-use crate::bluefin::utils::{get_current_time, get_random_number};
-
+use crate::utils;
 #[derive(Debug, Clone)]
 #[allow(non_snake_case)]
 pub struct Order {
@@ -141,7 +141,6 @@ pub fn get_serialized_order(order: &Order) -> String {
 // ----------------------------------------------------------------------------------- //
 //                                   PUBLIC METHODS                                    //
 // ----------------------------------------------------------------------------------- //
-
 pub fn create_limit_ioc_order(
     wallet_address: String,
     market_name: String,
@@ -168,8 +167,8 @@ pub fn create_limit_ioc_order(
         reduceOnly: reduce_only,
         postOnly: false,
         orderbookOnly: true,
-        expiration: get_current_time() + 100_000,
-        salt: get_random_number(),
+        expiration: utils::get_current_time() + 100_000,
+        salt: utils::get_random_number(),
         ioc: true,
         orderType: "LIMIT".to_string(),
         timeInForce: "IOC".to_string(),

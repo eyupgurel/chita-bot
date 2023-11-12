@@ -12,6 +12,9 @@ pub struct EnvVars {
     pub kukoin_on_boarding_url: String,
     pub kucoin_websocket_url: String,
     pub kucoin_endpoint: String,
+    pub kucoin_api_key: String,
+    pub kucoin_api_secret: String,
+    pub kucoin_api_phrase: String,
     pub log_level: String,
 }
 
@@ -42,6 +45,13 @@ pub fn env_variables() -> EnvVars {
         std::env::var("KUCOIN_WEB_SOCKET_URL").expect("KUCOIN_WEB_SOCKET_URL must be set.");
     let kucoin_endpoint = std::env::var("KUCOIN_ENDPOINT").expect("KUCOIN_ENDPOINT must be set.");
 
+    let kucoin_api_key = std::env::var("KUCOIN_API_KEY").expect("KUCOIN_API_KEY must be set.");
+    let kucoin_api_secret =
+        std::env::var("KUCOIN_API_SECRET").expect("KUCOIN_API_SECRET must be set.");
+
+    let kucoin_api_phrase =
+        std::env::var("KUCOIN_API_PASSPHRASE").expect("KUCOIN_API_PASSPHRASE must be set.");
+
     // misc
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
 
@@ -54,6 +64,9 @@ pub fn env_variables() -> EnvVars {
         kukoin_on_boarding_url,
         kucoin_endpoint,
         kucoin_websocket_url,
+        kucoin_api_key,
+        kucoin_api_secret,
+        kucoin_api_phrase,
         log_level,
     };
 }

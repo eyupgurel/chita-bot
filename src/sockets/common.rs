@@ -1,13 +1,25 @@
 use crate::models::common::OrderBook;
+use serde::de::DeserializeOwned;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
-use serde::de::DeserializeOwned;
 use tungstenite::stream::MaybeTlsStream;
 
-pub trait OrderBookStream<T> where
-    T: DeserializeOwned + Into<OrderBook>{
-    fn get_ob_socket(&self, url:&str, market:&str) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>>;
-    fn stream_ob_socket(&self, url:&str, market:&str, tx: Sender<OrderBook>, tx_diff: Sender<OrderBook>) {
+pub trait OrderBookStream<T>
+where
+    T: DeserializeOwned + Into<OrderBook>,
+{
+    fn get_ob_socket(
+        &self,
+        url: &str,
+        market: &str,
+    ) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>>;
+    fn stream_ob_socket(
+        &self,
+        url: &str,
+        market: &str,
+        tx: Sender<OrderBook>,
+        tx_diff: Sender<OrderBook>,
+    ) {
         let mut socket = self.get_ob_socket(url, market);
         let mut last_first_ask_price: Option<f64> = None;
         let mut last_first_bid_price: Option<f64> = None;
@@ -34,8 +46,10 @@ pub trait OrderBookStream<T> where
                     let current_first_ask_price = ob.asks.first().map(|ask| ask.0.clone());
                     let current_first_bid_price = ob.bids.first().map(|bid| bid.0.clone());
 
-                    let is_first_ask_price_changed = current_first_ask_price != last_first_ask_price;
-                    let is_first_bid_price_changed = current_first_bid_price != last_first_bid_price;
+                    let is_first_ask_price_changed =
+                        current_first_ask_price != last_first_ask_price;
+                    let is_first_bid_price_changed =
+                        current_first_bid_price != last_first_bid_price;
 
                     if is_first_ask_price_changed || is_first_bid_price_changed {
                         // Update the last known prices
@@ -46,11 +60,10 @@ pub trait OrderBookStream<T> where
                         tx_diff.send(ob.clone()).unwrap();
                     }
                     tx.send(ob).unwrap();
-
                 }
                 Err(e) => {
                     println!("Error during message handling: {:?}", e);
-                    socket =  self.get_ob_socket(url, market);
+                    socket = self.get_ob_socket(url, market);
                 }
             }
         }

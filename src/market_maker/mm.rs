@@ -1,25 +1,29 @@
-use crate::sockets::binance_ob_socket::{BinanceOrderBookStream};
-use crate::sockets::kucoin_ob_socket::stream_kucoin_ob_socket;
-use std::collections::HashMap;
-use std::sync::mpsc;
-use std::thread;
-use log::debug;
 use crate::constants::{BINANCE_WSS_URL, BLUEFIN_WSS_URL};
 use crate::models::binance_models::DepthUpdate;
 use crate::models::bluefin_models::OrderbookDepthUpdate;
-use crate::sockets::bluefin_ob_socket::{BluefinOrderBookStream};
+use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
+use crate::sockets::bluefin_ob_socket::BluefinOrderBookStream;
 use crate::sockets::common::OrderBookStream;
+use crate::sockets::kucoin_ob_socket::stream_kucoin_ob_socket;
+use log::debug;
+use std::collections::HashMap;
+use std::sync::mpsc;
+use std::thread;
 
+use crate::models::common::{add, divide, subtract, BookOperations, OrderBook};
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
-use crate::models::common::{add, divide, BookOperations, OrderBook, subtract};
 
-pub struct MM {
-
-}
+pub struct MM {}
 
 pub trait MarketMaker {
     fn connect(&self);
-    fn create_mm_pair(&self, ref_book:&OrderBook, mm_book:&OrderBook, tkr_book:&OrderBook, shift:f64) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>));
+    fn create_mm_pair(
+        &self,
+        ref_book: &OrderBook,
+        mm_book: &OrderBook,
+        tkr_book: &OrderBook,
+        shift: f64,
+    ) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>));
     fn debug_ob_map(&self, ob_map: &HashMap<String, OrderBook>);
 }
 
@@ -44,12 +48,17 @@ impl MarketMaker for MM {
             let ob_stream = BinanceOrderBookStream::<DepthUpdate>::new();
             let market = "btcusdt".to_string();
             let url = format!("{}/ws/{}@depth5@100ms", BINANCE_WSS_URL, market);
-            ob_stream.stream_ob_socket(&url ,&market, tx_binance_ob, tx_binance_ob_diff);
+            ob_stream.stream_ob_socket(&url, &market, tx_binance_ob, tx_binance_ob_diff);
         });
 
         let _handle_bluefin_ob = thread::spawn(|| {
             let ob_stream = BluefinOrderBookStream::<OrderbookDepthUpdate>::new();
-            ob_stream.stream_ob_socket(&BLUEFIN_WSS_URL, "BTC-PERP", tx_bluefin_ob,tx_bluefin_ob_diff);
+            ob_stream.stream_ob_socket(
+                &BLUEFIN_WSS_URL,
+                "BTC-PERP",
+                tx_bluefin_ob,
+                tx_bluefin_ob_diff,
+            );
         });
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
@@ -86,7 +95,6 @@ impl MarketMaker for MM {
                 }
             }
 
-
             match rx_binance_ob.try_recv() {
                 Ok(value) => {
                     ob_map.insert("binance".to_string(), value);
@@ -118,7 +126,6 @@ impl MarketMaker for MM {
                 }
             }
 
-
             match rx_bluefin_ob.try_recv() {
                 Ok(value) => {
                     ob_map.insert("bluefin".to_string(), value);
@@ -132,7 +139,7 @@ impl MarketMaker for MM {
             }
 
             match rx_bluefin_ob_diff.try_recv() {
-                Ok( value) => {
+                Ok(value) => {
                     debug!("diff of bluefin ob: {:?}", value);
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
@@ -153,11 +160,17 @@ impl MarketMaker for MM {
         }
     }
 
-    fn create_mm_pair(&self, ref_book:&OrderBook, mm_book:&OrderBook, tkr_book:&OrderBook, shift:f64) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)) {
+    fn create_mm_pair(
+        &self,
+        ref_book: &OrderBook,
+        mm_book: &OrderBook,
+        tkr_book: &OrderBook,
+        shift: f64,
+    ) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)) {
         let ref_mid_price = ref_book.calculate_mid_prices();
         let mm_mid_price = mm_book.calculate_mid_prices();
         let spread = subtract(&ref_mid_price, &mm_mid_price);
-        let half_spread = divide(&spread,2.0);
+        let half_spread = divide(&spread, 2.0);
         let mm_bid_prices = subtract(&mm_mid_price, &half_spread);
         let mm_ask_prices = add(&mm_mid_price, &half_spread);
         let mm_bid_sizes = tkr_book.bid_shift(shift);
@@ -194,8 +207,6 @@ impl MarketMaker for MM {
             for (i, (bid, size)) in bluefin_ob.bids.iter().enumerate() {
                 debug!("{}. bid: {}, size: {}", i, bid, size);
             }
-
         }
     }
 }
-

@@ -1,5 +1,5 @@
+#![allow(dead_code)]
 pub mod client {
-    use async_trait::async_trait;
     use log::{debug, error, info, warn};
     use std::net::TcpStream;
     use tungstenite::connect;
@@ -9,60 +9,18 @@ pub mod client {
 
     use blake2b_simd::Params;
     use ed25519_dalek::*;
-    use serde::Deserialize;
     use serde_json::{json, Value};
     use sha256::digest;
     use std::collections::HashMap;
 
     // custom modules
     use crate::bluefin::{
+        models::{
+            parse_user_position, Auth, Error, OrderUpdate, PostResponse, UserPosition, Wallet,
+        },
         orders::{create_limit_ioc_order, to_order_request, Order},
-        utils::parse_user_position,
     };
     use tungstenite::stream::MaybeTlsStream;
-
-    #[derive(Deserialize, Debug)]
-    pub struct Auth {
-        pub token: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    pub struct Error {
-        pub code: u64,
-        pub message: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    pub struct PostResponse {
-        pub error: Option<Error>,
-    }
-
-    #[derive(Deserialize, Debug)]
-    pub struct UserPosition {
-        pub symbol: String,
-        pub side: bool,
-        pub avg_entry_price: u128,
-        pub quantity: u128,
-        pub margin: u128,
-        pub leverage: u128,
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct Wallet {
-        pub signing_key: SigningKey,
-        pub public_key: String,
-        pub address: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all = "camelCase")]
-    pub struct OrderUpdate {
-        pub hash: String,
-        pub symbol: String,
-        pub order_status: String,
-        pub cancel_reason: String,
-    }
-
     pub struct BluefinClient {
         wallet: Wallet,
         api_gateway: String,
@@ -119,38 +77,9 @@ pub mod client {
         };
     }
 
-    #[async_trait]
-    pub trait ClientMethods {
-        async fn init(
-            wallet_key: &str,
-            api_gateway: &str,
-            onboarding_url: &str,
-            websocket_url: &str,
-            leverage: u128,
-        ) -> BluefinClient;
-        async fn onboard(&mut self);
-        async fn fetch_markets(&mut self);
-        async fn get_user_position(&self, market: &str) -> UserPosition;
-        fn create_limit_ioc_order(
-            &self,
-            market: &str,
-            is_buy: bool,
-            reduce_only: bool,
-            price: f64,
-            quantity: f64,
-            leverage: Option<u128>,
-        ) -> Order;
-        fn sign_order(&self, order: Order) -> String;
-        async fn post_signed_order(&self, order: Order, signature: String) -> PostResponse;
-
-        // web socket methods
-        async fn listen_to_web_socket(&self);
-    }
-
-    #[async_trait]
-    impl ClientMethods for BluefinClient {
+    impl BluefinClient {
         // creates client object, on-boards the user and fetches market ids
-        async fn init(
+        pub async fn new(
             wallet_key: &str,
             api_gateway: &str,
             onboarding_url: &str,
@@ -181,7 +110,7 @@ pub mod client {
             return client;
         }
 
-        async fn onboard(&mut self) {
+        pub async fn onboard(&mut self) {
             let mut msg_dict = HashMap::new();
             msg_dict.insert("onboardingUrl", self.onboarding_url.clone());
 
@@ -231,7 +160,7 @@ pub mod client {
             self.auth_token = auth.token;
         }
 
-        async fn fetch_markets(&mut self) {
+        pub async fn fetch_markets(&mut self) {
             let client = reqwest::Client::new();
 
             let markets = ["ETH-PERP", "BTC-PERP"];
@@ -257,8 +186,8 @@ pub mod client {
             } // end of for loop
         }
 
-        async fn get_user_position(&self, market: &str) -> UserPosition {
-            let client = reqwest::Client::new();
+        pub async fn get_user_position(&self, market: &str) -> UserPosition {
+            let client: reqwest::Client = reqwest::Client::new();
             let query = vec![("symbol", market)];
 
             let res = client
@@ -296,7 +225,7 @@ pub mod client {
             };
         }
 
-        fn create_limit_ioc_order(
+        pub fn create_limit_ioc_order(
             &self,
             market: &str,
             is_buy: bool,
@@ -323,7 +252,7 @@ pub mod client {
             );
         }
 
-        fn sign_order(&self, order: Order) -> String {
+        pub fn sign_order(&self, order: Order) -> String {
             let msg_hash_decoded = hex::decode(digest(&order.serialized)).expect("Decoding failed");
             let sig: Signature = self.wallet.signing_key.sign(&msg_hash_decoded);
             let order_signature = format!(
@@ -335,7 +264,7 @@ pub mod client {
             return order_signature;
         }
 
-        async fn post_signed_order(&self, order: Order, signature: String) -> PostResponse {
+        pub async fn post_signed_order(&self, order: Order, signature: String) -> PostResponse {
             let order_request = to_order_request(order, signature);
 
             let client = reqwest::Client::new();
@@ -366,7 +295,7 @@ pub mod client {
             }
         }
 
-        async fn listen_to_web_socket(&self) {
+        pub async fn listen_to_web_socket(&self) {
             // helper function to connect with websocket
             fn connect_socket(
                 url: String,
@@ -457,7 +386,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_create_bluefin_client() {
-        let bluefin_client = BluefinClient::init(
+        let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
@@ -490,7 +419,7 @@ pub mod client {
     #[tokio::test]
 
     async fn should_get_user_position() {
-        let bluefin_client = BluefinClient::init(
+        let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
@@ -505,7 +434,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_create_limit_ioc_order() {
-        let bluefin_client = BluefinClient::init(
+        let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
@@ -527,7 +456,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_create_signed_order() {
-        let bluefin_client = BluefinClient::init(
+        let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
@@ -543,7 +472,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_revert_when_placing_order_due_to_insufficient_balance() {
-        let bluefin_client = BluefinClient::init(
+        let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
@@ -564,7 +493,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_place_order_successfully() {
-        let bluefin_client = BluefinClient::init(
+        let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
@@ -586,7 +515,7 @@ pub mod client {
 
     #[tokio::test]
     async fn should_connect_bluefin_websocket() {
-        let bluefin_client = BluefinClient::init(
+        let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",

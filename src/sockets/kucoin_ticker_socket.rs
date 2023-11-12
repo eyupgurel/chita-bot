@@ -1,11 +1,11 @@
+use crate::constants::KUCOIN_TICKERV2_SOCKET_TOPIC;
 use crate::models::kucoin_models::{Comm, TickerV2};
+use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 use std::net::TcpStream;
 use std::sync::mpsc;
-use tungstenite::{connect};
+use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
-use crate::constants::{KUCOIN_TICKERV2_SOCKET_TOPIC};
-use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 
 pub fn get_kucoin_ticker_socket(
     market: &str,
@@ -87,12 +87,12 @@ pub fn stream_kucoin_ticker_socket(market: &str, tx: mpsc::Sender<(String, Ticke
                 }
 
                 send_ping(&mut kucoin_ticker_socket, &mut ack, &mut last_ping_time);
-
             }
 
             Err(e) => {
                 println!("Error during message handling: {:?}", e);
-                let (mut new_kucoin_socket, mut new_ack) = get_kucoin_ticker_socket(market, &get_kucoin_url());
+                let (mut new_kucoin_socket, mut new_ack) =
+                    get_kucoin_ticker_socket(market, &get_kucoin_url());
                 std::mem::swap(&mut kucoin_ticker_socket, &mut new_kucoin_socket);
                 std::mem::swap(&mut ack, &mut new_ack);
                 continue;
