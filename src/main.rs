@@ -9,9 +9,9 @@ mod models;
 mod sockets;
 mod tests;
 mod utils;
-use env::EnvVars;
 use crate::market_maker::mm::{MarketMaker, MM};
 use bluefin::BluefinClient;
+use env::EnvVars;
 
 #[tokio::main]
 async fn main() {

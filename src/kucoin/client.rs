@@ -135,7 +135,7 @@ pub mod client {
             return user_position;
         }
 
-        async fn place_limit_order(
+        pub async fn place_limit_order(
             &self,
             market: &str,
             is_buy: bool,
@@ -149,9 +149,8 @@ pub mod client {
             let side = if is_buy { "buy" } else { "sell" };
             let market_symbol = self.markets.get(market).unwrap();
 
-            let oid = utils::get_random_string();
             let mut params: HashMap<String, String> = HashMap::new();
-            params.insert(String::from("clientOid"), oid.clone());
+            params.insert(String::from("clientOid"), utils::get_random_string());
             params.insert(String::from("symbol"), market_symbol.to_string());
             params.insert(String::from("side"), side.to_string());
             params.insert(String::from("price"), price.to_string());
@@ -172,11 +171,15 @@ pub mod client {
                 .unwrap();
 
             if res.status().is_success() {
-                let response_body = res.text().await.unwrap();
-                println!("Futures order placed successfully: {}", response_body);
+                let response_body: String = res.text().await.unwrap();
+                info!("Futures order placed successfully: {}", response_body);
+                let value: Value =
+                    serde_json::from_str(&response_body).expect("JSON Decoding failed");
+
                 return CallResponse {
                     error: None,
-                    order_id: Some(oid.clone()),
+                    order_id: Some(value["data"]["orderId"].to_string()),
+
                 };
             } else {
                 let error: Error =
@@ -190,7 +193,8 @@ pub mod client {
             }
         }
 
-        async fn cancel_order_by_id(&self, order_id: &str) -> CallResponse {
+        pub async fn cancel_order_by_id(&self, order_id: &str) -> CallResponse {
+
             let endpoint = format!("/api/v1/orders/{}", order_id);
             let url = format!("{}{}", &self.api_gateway, endpoint);
 
@@ -222,7 +226,8 @@ pub mod client {
             }
         }
 
-        async fn cancel_order_by_market(&self, market: &str) -> CallResponse {
+        pub async fn cancel_order_by_market(&self, market: &str) -> CallResponse {
+
             let endpoint = String::from("/api/v1/orders");
             let mut params: HashMap<String, String> = HashMap::new();
 
@@ -358,6 +363,80 @@ pub mod client {
             3,
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn should_get_user_position_on_kucoin() {
+        let credentials: Credentials = Credentials::new("1", "2", "3");
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        )
+        .await;
+
+        client.get_position("ETH-PERP").await;
+
+        assert!(true, "Error while placing order");
+    }
+
+    #[tokio::test]
+    async fn should_post_order_on_kucoin() {
+        let credentials = Credentials::new("1", "2", "3");
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        )
+        .await;
+
+        let resp: CallResponse = client.place_limit_order("SUI-PERP", true, 0.58, 1).await;
+
+        println!("Placed order with id: {}", resp.order_id.unwrap());
+
+        assert!(true, "Error while placing order");
+    }
+
+    #[tokio::test]
+    async fn should_cancel_the_open_order_by_id() {
+        let credentials = Credentials::new("1", "2", "3");
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        )
+        .await;
+
+        client.cancel_order_by_id("12132131231").await;
+
+        assert!(true, "Error cancelling the order");
+    }
+
+    #[tokio::test]
+    async fn should_cancel_all_orders_for_market() {
+        let credentials = Credentials::new("1", "2", "3");
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        )
+        .await;
+
+        client.cancel_order_by_market("SUI-PERP").await;
+
+        assert!(true, "Error cancelling the order");
     }
 
     #[tokio::test]
