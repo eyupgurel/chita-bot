@@ -9,7 +9,6 @@ mod models;
 mod sockets;
 mod tests;
 mod utils;
-mod market_maker;
 use env::EnvVars;
 use crate::market_maker::mm::{MarketMaker, MM};
 use bluefin::BluefinClient;
