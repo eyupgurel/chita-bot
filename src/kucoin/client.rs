@@ -1,8 +1,5 @@
 pub mod client {
-    use crate::{
-        kucoin::models::{CallResponse, UserPosition},
-        utils,
-    };
+    use crate::{kucoin::models::{CallResponse, UserPosition}, utils};
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
@@ -11,12 +8,16 @@ pub mod client {
     use serde_json::{json, Value};
     use sha2::Sha256;
     use std::collections::HashMap;
+    use std::sync::mpsc::Sender;
     use std::time::Duration;
+    use crate::constants::{KUCOIN_FUTURES_BASE_WSS_URL};
 
     #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
 
     use crate::kucoin::models::{Error, Method, Response};
+    use crate::models::kucoin_models::TradeOrderMessage;
+    use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
 
     #[derive(Debug, Clone)]
     pub struct Credentials {
@@ -82,6 +83,52 @@ pub mod client {
 
             return kucoin_client;
         }
+
+        pub async fn get_private_token(&self) -> String {
+
+            let endpoint = String::from("/api/v1/bullet-private");
+
+            let url: String = format!("{}{}", &self.api_gateway, endpoint);
+
+
+            let headers: HeaderMap =
+                self.sign_headers(endpoint.clone(), None, None, Method::POST);
+
+            let res = self
+                .client
+                .post(url)
+                .headers(headers)
+                .send()
+                .await
+                .unwrap();
+
+            let body = res.text().await.unwrap();
+
+            let resp :Response = serde_json::from_str(&body).expect("JSON Decoding failed");
+
+            resp.data.token
+        }
+
+        pub async fn get_kucoin_private_socket_url(&self) -> String {
+            let token = self.get_private_token().await;
+            let kucoin_futures_wss_url = format!("{}?token={}", KUCOIN_FUTURES_BASE_WSS_URL, token);
+            kucoin_futures_wss_url
+        }
+
+        pub async fn stream_order_fill_socket(&self, market: &str, tx: Sender<(String, TradeOrderMessage)>)
+        {
+            let url = self.get_kucoin_private_socket_url().await;
+            stream_kucoin_socket(
+                market, &url,
+                tx, // Sender channel of the appropriate type
+                |msg: &str| -> TradeOrderMessage {
+                    let message: TradeOrderMessage =
+                        serde_json::from_str(&msg).expect("Can't parse");
+                    message
+                },
+            );
+        }
+
 
         pub async fn get_token(onboarding_url: &str) -> String {
             let client = reqwest::Client::new();
@@ -422,7 +469,7 @@ pub mod client {
     }
 
     #[tokio::test]
-    async fn should_cancel_all_orders_for_market() {
+    async fn should_cancel_all_orders_for_market_1() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -440,7 +487,7 @@ pub mod client {
     }
 
     #[tokio::test]
-    async fn should_get_user_position_on_kucoin() {
+    async fn should_get_user_position_on_kucoin_1() {
         let credentials: Credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -458,7 +505,7 @@ pub mod client {
     }
 
     #[tokio::test]
-    async fn should_post_order_on_kucoin() {
+    async fn should_post_order_on_kucoin_1() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -476,7 +523,7 @@ pub mod client {
     }
 
     #[tokio::test]
-    async fn should_cancel_the_open_order_by_id() {
+    async fn should_cancel_the_open_order_by_id_1() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(

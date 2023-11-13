@@ -4,14 +4,16 @@ use crate::models::bluefin_models::OrderbookDepthUpdate;
 use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
 use crate::sockets::bluefin_ob_socket::BluefinOrderBookStream;
 use crate::sockets::common::OrderBookStream;
-use crate::sockets::kucoin_ob_socket::stream_kucoin_ob_socket;
+use crate::sockets::kucoin_ob_socket::{stream_kucoin_socket};
 use log::debug;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
 
 use crate::models::common::{add, divide, subtract, BookOperations, OrderBook};
+use crate::models::kucoin_models::Level2Depth;
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
+use crate::sockets::kucoin_utils::get_kucoin_url;
 
 pub struct MM {}
 
@@ -37,7 +39,18 @@ impl MarketMaker for MM {
         let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
 
         let _handle_kucoin_ob = thread::spawn(move || {
-            stream_kucoin_ob_socket("XBTUSDTM", tx_kucoin_ob);
+
+            stream_kucoin_socket(
+                "XBTUSDTM", &get_kucoin_url(),
+                tx_kucoin_ob, // Sender channel of the appropriate type
+                |msg: &str| -> OrderBook {
+                let parsed_kucoin_ob: Level2Depth =
+                        serde_json::from_str(&msg).expect("Can't parse");
+                let ob: OrderBook = parsed_kucoin_ob.into();
+                ob
+                },
+            );
+
         });
 
         let _handle_kucoin_ticker = thread::spawn(move || {

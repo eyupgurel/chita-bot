@@ -2,11 +2,12 @@ use std::fmt;
 use serde::{de, Deserialize, Deserializer};
 use serde::de::{SeqAccess, Visitor};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct OrderBook {
     pub asks: Vec<(f64, f64)>,
     pub bids: Vec<(f64, f64)>,
 }
+
 
 pub trait BookOperations {
     fn calculate_mid_prices(&self) -> Vec<f64>;
