@@ -119,7 +119,9 @@ pub mod client {
         {
             let url = self.get_kucoin_private_socket_url().await;
             stream_kucoin_socket(
-                market, &url,
+                &url,
+                market,
+                &"/contractMarket/tradeOrders",
                 tx, // Sender channel of the appropriate type
                 |msg: &str| -> TradeOrderMessage {
                     let message: TradeOrderMessage =
@@ -452,78 +454,6 @@ pub mod client {
 
     #[tokio::test]
     async fn should_cancel_the_open_order_by_id() {
-        let credentials = Credentials::new("1", "2", "3");
-
-        let client = KuCoinClient::new(
-            credentials,
-            "https://api-futures.kucoin.com",
-            "https://api-futures.kucoin.com/api/v1/bullet-public",
-            "wss://ws-api-futures.kucoin.com/endpoint",
-            3,
-        )
-        .await;
-
-        client.cancel_order_by_id("12132131231").await;
-
-        assert!(true, "Error cancelling the order");
-    }
-
-    #[tokio::test]
-    async fn should_cancel_all_orders_for_market_1() {
-        let credentials = Credentials::new("1", "2", "3");
-
-        let client = KuCoinClient::new(
-            credentials,
-            "https://api-futures.kucoin.com",
-            "https://api-futures.kucoin.com/api/v1/bullet-public",
-            "wss://ws-api-futures.kucoin.com/endpoint",
-            3,
-        )
-        .await;
-
-        client.cancel_order_by_market("SUI-PERP").await;
-
-        assert!(true, "Error cancelling the order");
-    }
-
-    #[tokio::test]
-    async fn should_get_user_position_on_kucoin_1() {
-        let credentials: Credentials = Credentials::new("1", "2", "3");
-
-        let client = KuCoinClient::new(
-            credentials,
-            "https://api-futures.kucoin.com",
-            "https://api-futures.kucoin.com/api/v1/bullet-public",
-            "wss://ws-api-futures.kucoin.com/endpoint",
-            3,
-        )
-        .await;
-
-        client.get_position("ETH-PERP").await;
-
-        assert!(true, "Error while placing order");
-    }
-
-    #[tokio::test]
-    async fn should_post_order_on_kucoin_1() {
-        let credentials = Credentials::new("1", "2", "3");
-
-        let client = KuCoinClient::new(
-            credentials,
-            "https://api-futures.kucoin.com",
-            "https://api-futures.kucoin.com/api/v1/bullet-public",
-            "wss://ws-api-futures.kucoin.com/endpoint",
-            3,
-        )
-        .await;
-
-        let _resp = client.place_limit_order("SUI-PERP", true, 0.58, 1).await;
-
-        assert!(true, "Error while placing order");
-    }
-
-    #[tokio::test]
-    async fn should_cancel_the_open_order_by_id_1() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
