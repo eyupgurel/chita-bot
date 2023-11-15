@@ -41,7 +41,7 @@ pub fn env_variables() -> EnvVars {
         .parse::<u128>()
         .unwrap();
     // kucoin vars
-    let kukoin_on_boarding_url =
+    let kucoin_on_boarding_url =
         std::env::var("KUCOIN_ON_BOARDING_URL").expect("KUCOIN_ON_BOARDING_URL must be set.");
     let kucoin_websocket_url =
         std::env::var("KUCOIN_WEB_SOCKET_URL").expect("KUCOIN_WEB_SOCKET_URL must be set.");
@@ -71,7 +71,7 @@ pub fn env_variables() -> EnvVars {
         bluefin_wallet_key,
         bluefin_websocket_url,
         bluefin_leverage,
-        kucoin_on_boarding_url: kukoin_on_boarding_url,
+        kucoin_on_boarding_url: kucoin_on_boarding_url,
         kucoin_endpoint,
         kucoin_websocket_url,
         kucoin_api_key,

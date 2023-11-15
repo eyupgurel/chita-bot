@@ -2,6 +2,9 @@ use std::collections::HashMap;
 use std::fmt;
 use serde::{de, Deserialize, Deserializer};
 use serde::de::{SeqAccess, Visitor};
+use bigdecimal::{BigDecimal, ToPrimitive};
+use std::str::FromStr;
+use thiserror::Error;
 
 #[derive(Deserialize)]
 pub struct Markets {
@@ -117,6 +120,38 @@ pub fn deserialize_as_mix_tuples<'de, D>(deserializer: D) -> Result<Vec<(f64, f6
 }
 
 
+pub fn deserialize_as_bignumber_string_tuples<'de, D>(deserializer: D) -> Result<Vec<(f64, f64)>, D::Error>
+    where D: Deserializer<'de>,
+{
+    let string_tuples: Vec<(String, String)> = Vec::deserialize(deserializer)?;
+
+    let mut number_tuples: Vec<(f64, f64)> = Vec::with_capacity(string_tuples.len());
+    for (s1, s2) in string_tuples {
+        let n1 = convert_bignumber_to_f64(&s1).map_err(de::Error::custom)?;
+        let n2 = convert_bignumber_to_f64(&s2).map_err(de::Error::custom)?;
+        number_tuples.push((n1, n2));
+    }
+
+    Ok(number_tuples)
+}
+// Define a custom error type
+#[derive(Error, Debug)]
+enum ConversionError {
+    #[error("failed to parse big decimal")]
+    BigDecimalParseError,
+
+    #[error("failed to convert to f64")]
+    F64ConversionError,
+}
+fn convert_bignumber_to_f64(bignumber: &str) -> Result<f64, ConversionError> {
+    let bd = BigDecimal::from_str(bignumber)
+        .map_err(|_| ConversionError::BigDecimalParseError)?;
+
+    let scaled = bd / BigDecimal::from_str("1000000000000000000")
+        .map_err(|_| ConversionError::BigDecimalParseError)?;
+
+    scaled.to_f64().ok_or(ConversionError::F64ConversionError)
+}
 #[cfg(test)]
 mod tests {
     use crate::models::common::{BookOperations, OrderBook};

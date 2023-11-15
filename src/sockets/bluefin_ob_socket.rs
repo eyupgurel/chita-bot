@@ -2,12 +2,12 @@ use crate::models::common::OrderBook;
 use crate::sockets::common::OrderBookStream;
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use std::fs;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, WebSocket};
 use url::Url;
+
 
 pub struct BluefinOrderBookStream<T> {
     phantom: std::marker::PhantomData<T>, // Use PhantomData to indicate the generic type usage
@@ -79,7 +79,7 @@ where
                 Ok(message) => {
                     socket_message = message;
 
-                    let _msg = match socket_message {
+                    let msg = match socket_message {
                         tungstenite::Message::Text(s) => s,
                         _ => {
                             println!("Error getting text");
@@ -87,14 +87,11 @@ where
                         }
                     };
 
-                    //let parsed: OrderbookDepthUpdate = serde_json::from_str(&msg).expect("Can't parse");
+                    if !msg.contains("OrderbookDepthUpdate") {
+                        continue;
+                    }
 
-                    let json_str =
-                        fs::read_to_string("./src/tests/seed/bluefin/bluefin-partial-depth.json")
-                            .expect("Unable to read the file");
-
-                    let parsed: T = serde_json::from_str(&json_str).expect("Can't parse");
-
+                    let parsed: T = serde_json::from_str(&msg).expect("Can't parse");
                     let ob: OrderBook = parsed.into();
 
                     let current_first_ask_price = ob.asks.first().map(|ask| ask.0.clone());
