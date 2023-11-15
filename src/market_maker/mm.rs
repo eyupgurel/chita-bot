@@ -79,6 +79,8 @@ pub trait MarketMaker {
 
     fn has_valid_kucoin_bid_order_id(&self) -> bool;
 
+    fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)));
+
     fn debug_ob_map(&self, ob_map: &HashMap<String, OrderBook>);
 }
 
@@ -163,23 +165,7 @@ impl MarketMaker for MM {
                         let mm = self.create_mm_pair(ref_ob, mm_ob, tkr_ob, -0.1);
                         debug!("orders: {:?}", &mm);
 
-                        let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
-
-                        if self.has_valid_kucoin_ask_order_id(){
-                            self.kucoin_client.cancel_order_by_id(& self.kucoin_ask_order_response.order_id.clone().unwrap());
-                        }
-                        if self.has_valid_kucoin_bid_order_id(){
-                            self.kucoin_client.cancel_order_by_id(& self.kucoin_bid_order_response.order_id.clone().unwrap());
-                        }
-
-                        if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
-                            // Use top_ask which contains the top ask price and size
-                            self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&kucoin_market,false,top_ask.0, top_ask.1);
-                        }
-                        if let Some(top_bid) = self.extract_top_price_and_size(&mm.0) {
-                            // Use top_bid which contains the top bid price and size
-                            self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&kucoin_market,true,top_bid.0, top_bid.1);
-                        }
+                        self.place_maker_orders(&mm);
 
                     }
                 }
@@ -211,6 +197,8 @@ impl MarketMaker for MM {
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
                         let mm = self.create_mm_pair(&value, mm_ob, tkr_ob, -0.1);
                         debug!("orders: {:?}", mm);
+
+                        self.place_maker_orders(&mm);
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -242,6 +230,7 @@ impl MarketMaker for MM {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let mm = self.create_mm_pair(ref_ob, mm_ob, &value, -0.1);
                         debug!("orders {:?}", mm);
+                        self.place_maker_orders(&mm);
                     }
                     ob_map.insert("bluefin".to_string(), value);
                 }
@@ -300,6 +289,26 @@ impl MarketMaker for MM {
 
     fn has_valid_kucoin_bid_order_id(&self) -> bool {
         self.kucoin_bid_order_response.order_id.is_some()
+    }
+
+    fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>))) {
+        let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
+
+        if self.has_valid_kucoin_ask_order_id() {
+            self.kucoin_client.cancel_order_by_id(&self.kucoin_ask_order_response.order_id.clone().unwrap());
+        }
+        if self.has_valid_kucoin_bid_order_id() {
+            self.kucoin_client.cancel_order_by_id(&self.kucoin_bid_order_response.order_id.clone().unwrap());
+        }
+
+        if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
+            // Use top_ask which contains the top ask price and size
+            self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&kucoin_market, false, top_ask.0, top_ask.1);
+        }
+        if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
+            // Use top_bid which contains the top bid price and size
+            self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&kucoin_market, true, top_bid.0, top_bid.1);
+        }
     }
 
 
