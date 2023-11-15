@@ -14,10 +14,10 @@ use crate::env;
 use crate::env::EnvVars;
 
 use crate::models::common::{add, divide, subtract, BookOperations, OrderBook};
-use crate::models::kucoin_models::{Level2Depth, TradeOrderMessage};
+use crate::models::kucoin_models::{Level2Depth};
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
-use crate::kucoin::{CallResponse, Credentials, KuCoinClient};
+use crate::kucoin::{CallResponse, Credentials, KuCoinClient, TradeOrderMessage};
 
 pub struct MM {
     pub market_map: HashMap<String, String>,
@@ -86,6 +86,8 @@ pub trait MarketMaker {
 
 impl MarketMaker for MM {
     fn connect(&mut self) {
+        let vars: EnvVars = env::env_variables();
+
         let (tx_kucoin_ob, rx_kucoin_ob) = mpsc::channel();
         let (tx_kucoin_ticker, rx_kucoin_ticker) = mpsc::channel();
         let (tx_binance_ob, rx_binance_ob) = mpsc::channel();
@@ -264,6 +266,16 @@ impl MarketMaker for MM {
             match rx_kucoin_of.try_recv() {
                 Ok((_key, value)) => {
                     debug!("order response: {:?}", value);
+
+                    let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+
+                    let is_buy = value.data.side == "sell";
+                    let order =
+                        self.bluefin_client.create_limit_ioc_order(&bluefin_market,  is_buy , false, value.data.price, value.data.filled_size, Some(vars.bluefin_leverage));
+
+                    let signature = self.bluefin_client.sign_order(order.clone());
+                    let _status = self.bluefin_client.post_signed_order(order.clone(), signature);
+
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
