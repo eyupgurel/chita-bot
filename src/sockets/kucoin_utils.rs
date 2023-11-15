@@ -1,17 +1,18 @@
 use crate::models::kucoin_models::Response;
 use reqwest;
-use crate::constants::{KUCOIN_FUTURES_BASE_WSS_URL, KUCOIN_FUTURES_TOKEN_REQUEST_URL};
 use crate::models::kucoin_models::{Comm};
 use std::net::TcpStream;
 use tungstenite::{WebSocket};
 use tungstenite::stream::MaybeTlsStream;
+use crate::env;
+use crate::env::EnvVars;
 
 
 pub fn get_kucoin_url() -> String {
     let client = reqwest::blocking::Client::new();
-
+    let vars: EnvVars = env::env_variables();
     let j: Result<Response, Box<dyn std::error::Error>> = client
-        .post(KUCOIN_FUTURES_TOKEN_REQUEST_URL)
+        .post(&vars.kucoin_on_boarding_url)
         .send()
         .map_err(|e| format!("Error making the request: {}", e).into())
         .and_then(|res| {
@@ -28,7 +29,7 @@ pub fn get_kucoin_url() -> String {
         })
         .unwrap();
 
-    let _kucoin_futures_wss_url = format!("{}?token={}", KUCOIN_FUTURES_BASE_WSS_URL, _token);
+    let _kucoin_futures_wss_url = format!("{}?token={}", vars.kucoin_websocket_url, _token);
 
     return _kucoin_futures_wss_url;
 }
