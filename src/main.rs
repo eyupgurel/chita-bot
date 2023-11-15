@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::{fs, thread};
+use std::thread::JoinHandle;
 
 mod bluefin;
 mod constants;
@@ -27,16 +27,14 @@ fn main() {
     let markets: Markets = serde_json::from_str(&markets_config)
         .expect("JSON was not well-formatted");
 
-    // Vector to store thread handles
-    let mut handles = vec![];
-
-    // Create and store threads for each market
-    for (currency, market_map) in markets.markets {
-        let handle = thread::spawn(move || {
-            MM::new(market_map).connect();
-        });
-        handles.push(handle);
-    }
+    // Create and collect thread handles using an iterator
+    let handles: Vec<JoinHandle<()>> = markets.markets.into_iter()
+        .map(|(_currency, market_map)| {
+            thread::spawn(move || {
+                MM::new(market_map).connect();
+            })
+        })
+        .collect();
 
     // Wait for all threads to complete
     for handle in handles {
