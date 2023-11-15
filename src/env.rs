@@ -15,6 +15,7 @@ pub struct EnvVars {
     pub kucoin_api_key: String,
     pub kucoin_api_secret: String,
     pub kucoin_api_phrase: String,
+    pub kucoin_leverage: u128,
     pub log_level: String,
 }
 
@@ -52,6 +53,11 @@ pub fn env_variables() -> EnvVars {
     let kucoin_api_phrase =
         std::env::var("KUCOIN_API_PASSPHRASE").expect("KUCOIN_API_PASSPHRASE must be set.");
 
+    let kucoin_leverage = std::env::var("KUCOIN_LEVERAGE")
+        .expect("KUCOIN_LEVERAGE must be set.")
+        .parse::<u128>()
+        .unwrap();
+
     // misc
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
 
@@ -67,6 +73,7 @@ pub fn env_variables() -> EnvVars {
         kucoin_api_key,
         kucoin_api_secret,
         kucoin_api_phrase,
+        kucoin_leverage,
         log_level,
     };
 }
