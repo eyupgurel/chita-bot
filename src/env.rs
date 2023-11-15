@@ -9,13 +9,14 @@ pub struct EnvVars {
     pub bluefin_endpoint: String,
     pub bluefin_wallet_key: String,
     pub bluefin_leverage: u128,
-    pub kukoin_on_boarding_url: String,
+    pub kucoin_on_boarding_url: String,
     pub kucoin_websocket_url: String,
     pub kucoin_endpoint: String,
     pub kucoin_api_key: String,
     pub kucoin_api_secret: String,
     pub kucoin_api_phrase: String,
     pub kucoin_leverage: u128,
+    pub dry_run: bool,
     pub log_level: String,
 }
 
@@ -58,6 +59,9 @@ pub fn env_variables() -> EnvVars {
         .parse::<u128>()
         .unwrap();
 
+    let dry_run = std::env::var("DRY_RUN").expect("DRY_RUN must be set.").parse::<bool>()
+        .unwrap();
+
     // misc
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
 
@@ -67,13 +71,14 @@ pub fn env_variables() -> EnvVars {
         bluefin_wallet_key,
         bluefin_websocket_url,
         bluefin_leverage,
-        kukoin_on_boarding_url,
+        kucoin_on_boarding_url: kukoin_on_boarding_url,
         kucoin_endpoint,
         kucoin_websocket_url,
         kucoin_api_key,
         kucoin_api_secret,
         kucoin_api_phrase,
         kucoin_leverage,
+        dry_run,
         log_level,
     };
 }

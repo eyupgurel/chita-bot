@@ -80,7 +80,7 @@ pub fn stream_kucoin_socket<T, F>(
 
                 tx.send(("kucoin".to_string(), data)).unwrap();
 
-                send_ping(&mut kucoin_socket, &mut ack, &mut last_ping_time);
+                send_ping(&mut kucoin_socket, &mut ack, 50, &mut last_ping_time);
             }
 
             Err(e) => {
