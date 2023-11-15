@@ -27,6 +27,7 @@ pub mod client {
         onboarding_url: String,
         websocket_url: String,
         auth_token: String,
+        client: reqwest::blocking::Client,
         leverage: u128,
         markets: HashMap<String, String>,
     }
@@ -79,7 +80,7 @@ pub mod client {
 
     impl BluefinClient {
         // creates client object, on-boards the user and fetches market ids
-        pub async fn new(
+        pub fn new(
             wallet_key: &str,
             api_gateway: &str,
             onboarding_url: &str,
@@ -92,15 +93,16 @@ pub mod client {
                 onboarding_url: onboarding_url.to_string(),
                 websocket_url: websocket_url.to_string(),
                 auth_token: "".to_string(),
+                client: reqwest::blocking::Client::new(),
                 markets: HashMap::new(),
                 leverage,
             };
 
             // on-boards user on exchange
-            client.onboard().await;
+            client.onboard();
 
             // get market ids from dapi
-            client.fetch_markets().await;
+            client.fetch_markets();
 
             info!(
                 "Bluefin client initialized for wallet: {}",
@@ -110,7 +112,7 @@ pub mod client {
             return client;
         }
 
-        pub async fn onboard(&mut self) {
+        pub fn onboard(&mut self) {
             let mut msg_dict = HashMap::new();
             msg_dict.insert("onboardingUrl", self.onboarding_url.clone());
 
@@ -135,15 +137,13 @@ pub mod client {
             body.insert("userAddress", self.wallet.address.clone());
             body.insert("isTermAccepted", "True".to_string());
 
-            let client = reqwest::Client::new();
-            let res = client
+            let res = self
+                .client
                 .post(format!("{}/authorize", self.api_gateway))
                 .json(&body)
                 .send()
-                .await
                 .unwrap()
                 .text()
-                .await
                 .unwrap();
 
             let response: Value = serde_json::from_str(&res).unwrap();
@@ -160,18 +160,15 @@ pub mod client {
             self.auth_token = auth.token;
         }
 
-        pub async fn fetch_markets(&mut self) {
-            let client = reqwest::Client::new();
-
+        pub fn fetch_markets(&mut self) {
             let markets = ["ETH-PERP", "BTC-PERP"];
             for market in markets.iter() {
-                let res = client
+                let res = self
+                    .client
                     .get(format!("{}/meta?symbol={}", self.api_gateway, market))
                     .send()
-                    .await
                     .unwrap()
                     .text()
-                    .await
                     .unwrap();
 
                 let v: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
@@ -186,11 +183,11 @@ pub mod client {
             } // end of for loop
         }
 
-        pub async fn get_user_position(&self, market: &str) -> UserPosition {
-            let client: reqwest::Client = reqwest::Client::new();
+        pub fn get_user_position(&self, market: &str) -> UserPosition {
             let query = vec![("symbol", market)];
 
-            let res = client
+            let res = self
+                .client
                 .get(format!("{}/userPosition", self.api_gateway))
                 .header(
                     "Authorization",
@@ -198,10 +195,8 @@ pub mod client {
                 )
                 .query(&query)
                 .send()
-                .await
                 .unwrap()
                 .text()
-                .await
                 .unwrap();
 
             // let resp = serde_json::from_str(&res).unwrap();
@@ -264,11 +259,11 @@ pub mod client {
             return order_signature;
         }
 
-        pub async fn post_signed_order(&self, order: Order, signature: String) -> PostResponse {
+        pub fn post_signed_order(&self, order: Order, signature: String) -> PostResponse {
             let order_request = to_order_request(order, signature);
 
-            let client = reqwest::Client::new();
-            let res = client
+            let res = self
+                .client
                 .post(format!("{}/orders", self.api_gateway))
                 .header(
                     "Authorization",
@@ -276,10 +271,8 @@ pub mod client {
                 )
                 .json(&order_request)
                 .send()
-                .await
                 .unwrap()
                 .text()
-                .await
                 .unwrap();
 
             debug!("Response: {}", res);
@@ -295,7 +288,7 @@ pub mod client {
             }
         }
 
-        pub async fn listen_to_web_socket(&self) {
+        pub fn listen_to_web_socket(&self) {
             // helper function to connect with websocket
             fn connect_socket(
                 url: String,
@@ -384,16 +377,16 @@ pub mod client {
         );
     }
 
-    #[tokio::test]
-    async fn should_create_bluefin_client() {
+    #[test]
+    fn should_create_bluefin_client() {
         let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
             "wss://notifications.api.sui-staging.bluefin.io",
             1,
-        )
-        .await;
+        );
+
         assert_eq!(
             bluefin_client.wallet.address,
             "0xc6c71c996d437eb6589d1b8b17afcd1480afd5f30f6b7155ef468a9713d3240e"
@@ -416,32 +409,30 @@ pub mod client {
         );
     }
 
-    #[tokio::test]
+    #[test]
 
-    async fn should_get_user_position() {
+    fn should_get_user_position_on_bluefin() {
         let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
             "wss://notifications.api.sui-staging.bluefin.io",
             1,
-        )
-        .await;
+        );
 
-        let position: UserPosition = bluefin_client.get_user_position("ETH-PERP").await;
+        let position: UserPosition = bluefin_client.get_user_position("ETH-PERP");
         assert_eq!(position.quantity, 0);
     }
 
-    #[tokio::test]
-    async fn should_create_limit_ioc_order() {
+    #[test]
+    fn should_create_limit_ioc_order() {
         let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
             "wss://notifications.api.sui-staging.bluefin.io",
             1,
-        )
-        .await;
+        );
 
         let order =
             bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.1, 0.33, Some(1));
@@ -454,75 +445,67 @@ pub mod client {
         assert_eq!(order.leverage, 1000000000000000000);
     }
 
-    #[tokio::test]
-    async fn should_create_signed_order() {
+    #[test]
+    fn should_create_signed_order() {
         let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
             "wss://notifications.api.sui-staging.bluefin.io",
             1,
-        )
-        .await;
+        );
 
         let order =
             bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.0, 0.33, Some(1));
         let _signature = bluefin_client.sign_order(order);
     }
 
-    #[tokio::test]
-    async fn should_revert_when_placing_order_due_to_insufficient_balance() {
+    #[test]
+    fn should_revert_when_placing_order_due_to_insufficient_balance() {
         let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
             "wss://notifications.api.sui-staging.bluefin.io",
             1,
-        )
-        .await;
+        );
 
         let order =
             bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 10.0, Some(1));
 
         let signature = bluefin_client.sign_order(order.clone());
-        let status = bluefin_client
-            .post_signed_order(order.clone(), signature)
-            .await;
+        let status = bluefin_client.post_signed_order(order.clone(), signature);
         assert_eq!(status.error.unwrap().code, 3055);
     }
 
-    #[tokio::test]
-    async fn should_place_order_successfully() {
+    #[test]
+    fn should_place_order_successfully() {
         let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
             "wss://notifications.api.sui-staging.bluefin.io",
             3,
-        )
-        .await;
+        );
 
         let order =
             bluefin_client.create_limit_ioc_order("ETH-PERP", true, false, 1600.67, 0.01, None);
 
         let signature = bluefin_client.sign_order(order.clone());
-        let status = bluefin_client
-            .post_signed_order(order.clone(), signature)
-            .await;
+        let status = bluefin_client.post_signed_order(order.clone(), signature);
 
         assert!(status.error.is_none(), "Error while placing order");
     }
 
-    #[tokio::test]
-    async fn should_connect_bluefin_websocket() {
+    #[test]
+    fn should_connect_bluefin_websocket() {
         let bluefin_client = BluefinClient::new(
             "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
             "https://dapi.api.sui-staging.bluefin.io",
             "https://testnet.bluefin.io",
             "wss://notifications.api.sui-staging.bluefin.io",
             1,
-        )
-        .await;
+        );
 
         let _ = bluefin_client.listen_to_web_socket();
     }
