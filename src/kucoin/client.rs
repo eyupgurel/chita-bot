@@ -1,5 +1,9 @@
 pub mod client {
-    use crate::{kucoin::models::{CallResponse, UserPosition}, utils};
+    use crate::constants::KUCOIN_FUTURES_BASE_WSS_URL;
+    use crate::{
+        kucoin::models::{CallResponse, UserPosition},
+        utils,
+    };
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
@@ -10,7 +14,6 @@ pub mod client {
     use std::collections::HashMap;
     use std::sync::mpsc::Sender;
     use std::time::Duration;
-    use crate::constants::{KUCOIN_FUTURES_BASE_WSS_URL};
 
     #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
@@ -45,14 +48,14 @@ pub mod client {
         onboarding_url: String,
         #[allow(unused)]
         websocket_url: String,
-        client: reqwest::Client,
+        client: reqwest::blocking::Client,
         leverage: u128,
         markets: HashMap<String, String>,
     }
 
     #[allow(unused)]
     impl KuCoinClient {
-        pub async fn new(
+        pub fn new(
             credentials: Credentials,
             api_gateway: &str,
             onboarding_url: &str,
@@ -64,7 +67,7 @@ pub mod client {
             markets.insert("BTC-PERP".to_string(), "BTCUSDTM".to_string());
             markets.insert("SUI-PERP".to_string(), "SUIUSDTM".to_string());
 
-            let client = reqwest::Client::builder()
+            let client = reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(60))
                 .build()
                 .unwrap();
@@ -84,42 +87,37 @@ pub mod client {
             return kucoin_client;
         }
 
-        pub async fn get_private_token(&self) -> String {
-
+        pub fn get_private_token(&self) -> String {
             let endpoint = String::from("/api/v1/bullet-private");
 
             let url: String = format!("{}{}", &self.api_gateway, endpoint);
 
+            let headers: HeaderMap = self.sign_headers(endpoint.clone(), None, None, Method::POST);
 
-            let headers: HeaderMap =
-                self.sign_headers(endpoint.clone(), None, None, Method::POST);
+            let res = self.client.post(url).headers(headers).send().unwrap();
 
-            let res = self
-                .client
-                .post(url)
-                .headers(headers)
-                .send()
-                .await
-                .unwrap();
+            let body = res.text().unwrap();
 
-            let body = res.text().await.unwrap();
-
-            let resp :Response = serde_json::from_str(&body).expect("JSON Decoding failed");
+            let resp: Response = serde_json::from_str(&body).expect("JSON Decoding failed");
 
             resp.data.token
         }
 
-        pub async fn get_kucoin_private_socket_url(&self) -> String {
-            let token = self.get_private_token().await;
+        pub fn get_kucoin_private_socket_url(&self) -> String {
+            let token = self.get_private_token();
             let kucoin_futures_wss_url = format!("{}?token={}", KUCOIN_FUTURES_BASE_WSS_URL, token);
             kucoin_futures_wss_url
         }
 
-        pub async fn stream_order_fill_socket(&self, market: &str, tx: Sender<(String, TradeOrderMessage)>)
-        {
-            let url = self.get_kucoin_private_socket_url().await;
+        pub fn stream_order_fill_socket(
+            &self,
+            market: &str,
+            tx: Sender<(String, TradeOrderMessage)>,
+        ) {
+            let url = self.get_kucoin_private_socket_url();
             stream_kucoin_socket(
-                market, &url,
+                market,
+                &url,
                 tx, // Sender channel of the appropriate type
                 |msg: &str| -> TradeOrderMessage {
                     let message: TradeOrderMessage =
@@ -129,18 +127,15 @@ pub mod client {
             );
         }
 
-
-        pub async fn get_token(onboarding_url: &str) -> String {
-            let client = reqwest::Client::new();
+        pub fn get_token(onboarding_url: &str) -> String {
+            let client = reqwest::blocking::Client::new();
 
             let resp: Response = serde_json::from_str(
                 client
                     .post(onboarding_url)
                     .send()
-                    .await
                     .unwrap()
                     .text()
-                    .await
                     .unwrap()
                     .as_str(),
             )
@@ -149,7 +144,7 @@ pub mod client {
             return resp.data.token;
         }
 
-        pub async fn get_position(&self, market: &str) -> UserPosition {
+        pub fn get_position(&self, market: &str) -> UserPosition {
             let endpoint = String::from("/api/v1/position");
             let market_symbol = self.markets.get(market).unwrap();
 
@@ -167,10 +162,8 @@ pub mod client {
                 .get(url)
                 .headers(headers)
                 .send()
-                .await
                 .unwrap()
                 .text()
-                .await
                 .unwrap();
 
             let position: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
@@ -182,7 +175,7 @@ pub mod client {
             return user_position;
         }
 
-        pub async fn place_limit_order(
+        pub fn place_limit_order(
             &self,
             market: &str,
             is_buy: bool,
@@ -214,11 +207,10 @@ pub mod client {
                 .headers(headers)
                 .json(&json!(params))
                 .send()
-                .await
                 .unwrap();
 
             if res.status().is_success() {
-                let response_body: String = res.text().await.unwrap();
+                let response_body: String = res.text().unwrap();
                 info!("Futures order placed successfully: {}", response_body);
                 let value: Value =
                     serde_json::from_str(&response_body).expect("JSON Decoding failed");
@@ -226,11 +218,10 @@ pub mod client {
                 return CallResponse {
                     error: None,
                     order_id: Some(value["data"]["orderId"].to_string()),
-
                 };
             } else {
                 let error: Error =
-                    serde_json::from_str(&res.text().await.unwrap()).expect("JSON Decoding failed");
+                    serde_json::from_str(&res.text().unwrap()).expect("JSON Decoding failed");
 
                 eprintln!("Error placing futures order: {:#?}", error);
                 return CallResponse {
@@ -240,31 +231,24 @@ pub mod client {
             }
         }
 
-        pub async fn cancel_order_by_id(&self, order_id: &str) -> CallResponse {
-
+        pub fn cancel_order_by_id(&self, order_id: &str) -> CallResponse {
             let endpoint = format!("/api/v1/orders/{}", order_id);
             let url = format!("{}{}", &self.api_gateway, endpoint);
 
             let headers: HeaderMap = self.sign_headers(endpoint, None, None, Method::DELETE);
 
-            let resp = self
-                .client
-                .delete(url)
-                .headers(headers)
-                .send()
-                .await
-                .unwrap();
+            let resp = self.client.delete(url).headers(headers).send().unwrap();
 
             if resp.status().is_success() {
-                let response_body = resp.text().await.unwrap();
+                let response_body = resp.text().unwrap();
                 println!("Order successfully cancelled: {}", response_body);
                 return CallResponse {
                     error: None,
                     order_id: None,
                 };
             } else {
-                let error: Error = serde_json::from_str(&resp.text().await.unwrap())
-                    .expect("JSON Decoding failed");
+                let error: Error =
+                    serde_json::from_str(&resp.text().unwrap()).expect("JSON Decoding failed");
                 eprintln!("Error cancelling order: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
@@ -273,8 +257,7 @@ pub mod client {
             }
         }
 
-        pub async fn cancel_order_by_market(&self, market: &str) -> CallResponse {
-
+        pub fn cancel_order_by_market(&self, market: &str) -> CallResponse {
             let endpoint = String::from("/api/v1/orders");
             let mut params: HashMap<String, String> = HashMap::new();
 
@@ -286,24 +269,18 @@ pub mod client {
             let url = format!("{}{}{}", &self.api_gateway, endpoint, query);
             let headers = self.sign_headers(endpoint, None, Some(query), Method::DELETE);
 
-            let resp = self
-                .client
-                .delete(url)
-                .headers(headers)
-                .send()
-                .await
-                .unwrap();
+            let resp = self.client.delete(url).headers(headers).send().unwrap();
 
             if resp.status().is_success() {
-                let response_body = resp.text().await.unwrap();
+                let response_body = resp.text().unwrap();
                 println!("Order successfully cancelled for market: {}", market);
                 return CallResponse {
                     error: None,
                     order_id: None,
                 };
             } else {
-                let error: Error = serde_json::from_str(&resp.text().await.unwrap())
-                    .expect("JSON Decoding failed");
+                let error: Error =
+                    serde_json::from_str(&resp.text().unwrap()).expect("JSON Decoding failed");
                 eprintln!(
                     "Error cancelling orders for market({}): {:#?}",
                     market, error
@@ -398,8 +375,8 @@ pub mod client {
         }
     }
 
-    #[tokio::test]
-    async fn should_create_kucoin_client() {
+    #[test]
+    fn should_create_kucoin_client() {
         let credentials = Credentials::new("key", "secret", "phrase");
 
         let _ = KuCoinClient::new(
@@ -408,12 +385,11 @@ pub mod client {
             "https://api-futures.kucoin.com/api/v1/bullet-public",
             "wss://ws-api-futures.kucoin.com/endpoint",
             3,
-        )
-        .await;
+        );
     }
 
-    #[tokio::test]
-    async fn should_get_user_position_on_kucoin() {
+    #[test]
+    fn should_get_user_position_on_kucoin() {
         let credentials: Credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -422,16 +398,15 @@ pub mod client {
             "https://api-futures.kucoin.com/api/v1/bullet-public",
             "wss://ws-api-futures.kucoin.com/endpoint",
             3,
-        )
-        .await;
+        );
 
-        client.get_position("ETH-PERP").await;
+        client.get_position("ETH-PERP");
 
         assert!(true, "Error while placing order");
     }
 
-    #[tokio::test]
-    async fn should_post_order_on_kucoin() {
+    #[test]
+    fn should_post_order_on_kucoin() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -440,18 +415,17 @@ pub mod client {
             "https://api-futures.kucoin.com/api/v1/bullet-public",
             "wss://ws-api-futures.kucoin.com/endpoint",
             3,
-        )
-        .await;
+        );
 
-        let resp: CallResponse = client.place_limit_order("SUI-PERP", true, 0.58, 1).await;
+        let resp: CallResponse = client.place_limit_order("SUI-PERP", true, 0.58, 1);
 
         println!("Placed order with id: {}", resp.order_id.unwrap());
 
         assert!(true, "Error while placing order");
     }
 
-    #[tokio::test]
-    async fn should_cancel_the_open_order_by_id() {
+    #[test]
+    fn should_cancel_the_open_order_by_id() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -460,16 +434,15 @@ pub mod client {
             "https://api-futures.kucoin.com/api/v1/bullet-public",
             "wss://ws-api-futures.kucoin.com/endpoint",
             3,
-        )
-        .await;
+        );
 
-        client.cancel_order_by_id("12132131231").await;
+        client.cancel_order_by_id("12132131231");
 
         assert!(true, "Error cancelling the order");
     }
 
-    #[tokio::test]
-    async fn should_cancel_all_orders_for_market_1() {
+    #[test]
+    fn should_cancel_the_open_order_by_id_1() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -478,34 +451,15 @@ pub mod client {
             "https://api-futures.kucoin.com/api/v1/bullet-public",
             "wss://ws-api-futures.kucoin.com/endpoint",
             3,
-        )
-        .await;
+        );
 
-        client.cancel_order_by_market("SUI-PERP").await;
+        client.cancel_order_by_id("12132131231");
 
         assert!(true, "Error cancelling the order");
     }
 
-    #[tokio::test]
-    async fn should_get_user_position_on_kucoin_1() {
-        let credentials: Credentials = Credentials::new("1", "2", "3");
-
-        let client = KuCoinClient::new(
-            credentials,
-            "https://api-futures.kucoin.com",
-            "https://api-futures.kucoin.com/api/v1/bullet-public",
-            "wss://ws-api-futures.kucoin.com/endpoint",
-            3,
-        )
-        .await;
-
-        client.get_position("ETH-PERP").await;
-
-        assert!(true, "Error while placing order");
-    }
-
-    #[tokio::test]
-    async fn should_post_order_on_kucoin_1() {
+    #[test]
+    fn should_cancel_all_orders_for_market() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -514,46 +468,9 @@ pub mod client {
             "https://api-futures.kucoin.com/api/v1/bullet-public",
             "wss://ws-api-futures.kucoin.com/endpoint",
             3,
-        )
-        .await;
+        );
 
-        let _resp = client.place_limit_order("SUI-PERP", true, 0.58, 1).await;
-
-        assert!(true, "Error while placing order");
-    }
-
-    #[tokio::test]
-    async fn should_cancel_the_open_order_by_id_1() {
-        let credentials = Credentials::new("1", "2", "3");
-
-        let client = KuCoinClient::new(
-            credentials,
-            "https://api-futures.kucoin.com",
-            "https://api-futures.kucoin.com/api/v1/bullet-public",
-            "wss://ws-api-futures.kucoin.com/endpoint",
-            3,
-        )
-        .await;
-
-        client.cancel_order_by_id("12132131231").await;
-
-        assert!(true, "Error cancelling the order");
-    }
-
-    #[tokio::test]
-    async fn should_cancel_all_orders_for_market() {
-        let credentials = Credentials::new("1", "2", "3");
-
-        let client = KuCoinClient::new(
-            credentials,
-            "https://api-futures.kucoin.com",
-            "https://api-futures.kucoin.com/api/v1/bullet-public",
-            "wss://ws-api-futures.kucoin.com/endpoint",
-            3,
-        )
-        .await;
-
-        client.cancel_order_by_market("ETH-PERP").await;
+        client.cancel_order_by_market("ETH-PERP");
 
         assert!(true, "Error cancelling the order");
     }
