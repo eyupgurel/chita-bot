@@ -12,15 +12,12 @@ pub mod client {
     use serde_json::{json, Value};
     use sha2::Sha256;
     use std::collections::HashMap;
-    use std::sync::mpsc::Sender;
     use std::time::Duration;
 
     #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
 
     use crate::kucoin::models::{Error, Method, Response};
-    use crate::models::kucoin_models::TradeOrderMessage;
-    use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
 
     #[derive(Debug, Clone)]
     pub struct Credentials {
@@ -107,25 +104,6 @@ pub mod client {
             let token = self.get_private_token();
             let kucoin_futures_wss_url = format!("{}?token={}", KUCOIN_FUTURES_BASE_WSS_URL, token);
             kucoin_futures_wss_url
-        }
-
-        pub fn stream_order_fill_socket(
-            &self,
-            market: &str,
-            tx: Sender<(String, TradeOrderMessage)>,
-        ) {
-            let url = self.get_kucoin_private_socket_url();
-            stream_kucoin_socket(
-                &url,
-                market,
-                &"/contractMarket/tradeOrders",
-                tx, // Sender channel of the appropriate type
-                |msg: &str| -> TradeOrderMessage {
-                    let message: TradeOrderMessage =
-                        serde_json::from_str(&msg).expect("Can't parse");
-                    message
-                },
-            );
         }
 
         pub fn get_token(onboarding_url: &str) -> String {

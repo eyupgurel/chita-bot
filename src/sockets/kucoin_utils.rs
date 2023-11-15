@@ -36,9 +36,10 @@ pub fn get_kucoin_url() -> String {
 pub fn send_ping(
     kucoin_socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     ack: &mut Comm,
-    last_ping_time: &mut std::time::Instant
+    skip_duration: u64,
+    last_ping_time: &mut std::time::Instant,
 ) {
-    if last_ping_time.elapsed() >= std::time::Duration::from_secs(50) {
+    if last_ping_time.elapsed() >= std::time::Duration::from_secs(skip_duration) {
         let ping = Comm {
             id: ack.id.clone(),
             type_: "ping".to_string(),

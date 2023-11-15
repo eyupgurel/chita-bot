@@ -5,7 +5,7 @@ use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
 use crate::sockets::bluefin_ob_socket::BluefinOrderBookStream;
 use crate::sockets::common::OrderBookStream;
 use crate::sockets::kucoin_ob_socket::{stream_kucoin_socket};
-use log::debug;
+use log::{debug, error};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
@@ -14,10 +14,10 @@ use crate::env;
 use crate::env::EnvVars;
 
 use crate::models::common::{add, divide, subtract, BookOperations, OrderBook};
-use crate::models::kucoin_models::Level2Depth;
+use crate::models::kucoin_models::{Level2Depth};
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
-use crate::kucoin::{CallResponse, Credentials, KuCoinClient};
+use crate::kucoin::{CallResponse, Credentials, KuCoinClient, TradeOrderMessage};
 
 pub struct MM {
     pub market_map: HashMap<String, String>,
@@ -46,7 +46,7 @@ impl MM {
                 &vars.kucoin_api_phrase,
             ),
             &vars.kucoin_endpoint,
-            &vars.kukoin_on_boarding_url,
+            &vars.kucoin_on_boarding_url,
             &vars.kucoin_websocket_url,
             vars.kucoin_leverage,
         );
@@ -79,17 +79,22 @@ pub trait MarketMaker {
 
     fn has_valid_kucoin_bid_order_id(&self) -> bool;
 
+    fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)));
+
     fn debug_ob_map(&self, ob_map: &HashMap<String, OrderBook>);
 }
 
 impl MarketMaker for MM {
     fn connect(&mut self) {
+        let vars: EnvVars = env::env_variables();
+
         let (tx_kucoin_ob, rx_kucoin_ob) = mpsc::channel();
         let (tx_kucoin_ticker, rx_kucoin_ticker) = mpsc::channel();
         let (tx_binance_ob, rx_binance_ob) = mpsc::channel();
         let (tx_binance_ob_diff, rx_binance_ob_diff) = mpsc::channel();
         let (tx_bluefin_ob, rx_bluefin_ob) = mpsc::channel();
         let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
+        let (tx_kucoin_of, rx_kucoin_of) = mpsc::channel();
 
         let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
         let kucoin_market_for_ob = kucoin_market.clone();
@@ -138,6 +143,24 @@ impl MarketMaker for MM {
             );
         });
 
+        let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
+
+        let kucoin_market_for_order_fill = kucoin_market.clone();
+        let _handle_kucoin_of = thread::spawn(move || {
+            stream_kucoin_socket(
+                &kucoin_private_socket_url,
+                &kucoin_market_for_order_fill,
+                &"/contractMarket/tradeOrders",
+                tx_kucoin_of, // Sender channel of the appropriate type
+                |msg: &str| -> TradeOrderMessage {
+                    let message: TradeOrderMessage =
+                        serde_json::from_str(&msg).expect("Can't parse");
+                    message
+                },
+            );
+        });
+
+
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
 
         loop {
@@ -163,23 +186,7 @@ impl MarketMaker for MM {
                         let mm = self.create_mm_pair(ref_ob, mm_ob, tkr_ob, -0.1);
                         debug!("orders: {:?}", &mm);
 
-                        let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
-
-                        if self.has_valid_kucoin_ask_order_id(){
-                            self.kucoin_client.cancel_order_by_id(& self.kucoin_ask_order_response.order_id.clone().unwrap());
-                        }
-                        if self.has_valid_kucoin_bid_order_id(){
-                            self.kucoin_client.cancel_order_by_id(& self.kucoin_bid_order_response.order_id.clone().unwrap());
-                        }
-
-                        if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
-                            // Use top_ask which contains the top ask price and size
-                            self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&kucoin_market,false,top_ask.0, top_ask.1);
-                        }
-                        if let Some(top_bid) = self.extract_top_price_and_size(&mm.0) {
-                            // Use top_bid which contains the top bid price and size
-                            self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&kucoin_market,true,top_bid.0, top_bid.1);
-                        }
+                        self.place_maker_orders(&mm);
 
                     }
                 }
@@ -211,6 +218,8 @@ impl MarketMaker for MM {
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
                         let mm = self.create_mm_pair(&value, mm_ob, tkr_ob, -0.1);
                         debug!("orders: {:?}", mm);
+
+                        self.place_maker_orders(&mm);
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -242,6 +251,7 @@ impl MarketMaker for MM {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let mm = self.create_mm_pair(ref_ob, mm_ob, &value, -0.1);
                         debug!("orders {:?}", mm);
+                        self.place_maker_orders(&mm);
                     }
                     ob_map.insert("bluefin".to_string(), value);
                 }
@@ -252,6 +262,29 @@ impl MarketMaker for MM {
                     panic!("Bluefin worker has disconnected!");
                 }
             }
+
+            match rx_kucoin_of.try_recv() {
+                Ok((_key, value)) => {
+                    debug!("order response: {:?}", value);
+
+                    let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+
+                    let is_buy = value.data.side == "sell";
+                    let order =
+                        self.bluefin_client.create_limit_ioc_order(&bluefin_market,  is_buy , false, value.data.price, value.data.filled_size, Some(vars.bluefin_leverage));
+
+                    let signature = self.bluefin_client.sign_order(order.clone());
+                    let _status = self.bluefin_client.post_signed_order(order.clone(), signature);
+
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from binance yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    panic!("Bluefin worker has disconnected!");
+                }
+            }
+
             self.debug_ob_map(&ob_map);
         }
     }
@@ -300,6 +333,47 @@ impl MarketMaker for MM {
 
     fn has_valid_kucoin_bid_order_id(&self) -> bool {
         self.kucoin_bid_order_response.order_id.is_some()
+    }
+
+    fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>))) {
+
+        let mut can_place_order = true;
+
+        if self.has_valid_kucoin_ask_order_id() {
+            match self.kucoin_client.cancel_order_by_id(&self.kucoin_ask_order_response.order_id.clone().unwrap()) {
+                CallResponse { error: Some(e), .. } => {
+                    // Log the error and set flag to false
+                    error!("Error cancelling Kucoin ask order: {:?}", e);
+                    can_place_order = false;
+                },
+                _ => {}
+            }
+        }
+
+        if self.has_valid_kucoin_bid_order_id() {
+            match self.kucoin_client.cancel_order_by_id(&self.kucoin_bid_order_response.order_id.clone().unwrap()) {
+                CallResponse { error: Some(e), .. } => {
+                    // Log the error and set flag to false
+                    error!("Error cancelling Kucoin bid order: {:?}", e);
+                    can_place_order = false;
+                },
+                _ => {}
+            }
+        }
+
+        let vars: EnvVars = env::env_variables();
+        let dry_run = vars.dry_run;
+
+        if can_place_order && !dry_run {
+            let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
+
+            if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
+                self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&kucoin_market, false, top_ask.0, top_ask.1);
+            }
+            if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
+                self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&kucoin_market, true, top_bid.0, top_bid.1);
+            }
+        }
     }
 
 
