@@ -294,20 +294,37 @@ impl MarketMaker for MM {
     fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>))) {
         let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
 
+        let mut can_place_order = true;
+
         if self.has_valid_kucoin_ask_order_id() {
-            self.kucoin_client.cancel_order_by_id(&self.kucoin_ask_order_response.order_id.clone().unwrap());
-        }
-        if self.has_valid_kucoin_bid_order_id() {
-            self.kucoin_client.cancel_order_by_id(&self.kucoin_bid_order_response.order_id.clone().unwrap());
+            match self.kucoin_client.cancel_order_by_id(&self.kucoin_ask_order_response.order_id.clone().unwrap()) {
+                CallResponse { error: Some(e), .. } => {
+                    // Log the error and set flag to false
+                    log::error!("Error cancelling Kucoin ask order: {:?}", e);
+                    can_place_order = false;
+                },
+                _ => {}
+            }
         }
 
-        if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
-            // Use top_ask which contains the top ask price and size
-            self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&kucoin_market, false, top_ask.0, top_ask.1);
+        if self.has_valid_kucoin_bid_order_id() {
+            match self.kucoin_client.cancel_order_by_id(&self.kucoin_bid_order_response.order_id.clone().unwrap()) {
+                CallResponse { error: Some(e), .. } => {
+                    // Log the error and set flag to false
+                    log::error!("Error cancelling Kucoin bid order: {:?}", e);
+                    can_place_order = false;
+                },
+                _ => {}
+            }
         }
-        if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
-            // Use top_bid which contains the top bid price and size
-            self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&kucoin_market, true, top_bid.0, top_bid.1);
+
+        if can_place_order {
+            if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
+                self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&kucoin_market, false, top_ask.0, top_ask.1);
+            }
+            if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
+                self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&kucoin_market, true, top_bid.0, top_bid.1);
+            }
         }
     }
 
