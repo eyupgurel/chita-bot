@@ -1,4 +1,4 @@
-use crate::constants::{BINANCE_WSS_URL, BLUEFIN_WSS_URL};
+use crate::constants::{BINANCE_WSS_URL, BLUEFIN_WSS_URL, KUCOIN_DEPTH_SOCKET_TOPIC};
 use crate::models::binance_models::DepthUpdate;
 use crate::models::bluefin_models::OrderbookDepthUpdate;
 use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
@@ -41,7 +41,9 @@ impl MarketMaker for MM {
         let _handle_kucoin_ob = thread::spawn(move || {
 
             stream_kucoin_socket(
-                "XBTUSDTM", &get_kucoin_url(),
+                &get_kucoin_url(),
+                "XBTUSDTM",
+                &KUCOIN_DEPTH_SOCKET_TOPIC,
                 tx_kucoin_ob, // Sender channel of the appropriate type
                 |msg: &str| -> OrderBook {
                 let parsed_kucoin_ob: Level2Depth =

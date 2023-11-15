@@ -1,4 +1,3 @@
-use crate::constants::KUCOIN_DEPTH_SOCKET_TOPIC;
 use crate::models::kucoin_models::{Comm};
 use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 use std::net::TcpStream;
@@ -8,8 +7,9 @@ use tungstenite::stream::MaybeTlsStream;
 use url::Url;
 
 pub fn get_kucoin_socket(
-    market: &str,
     url: &str,
+    market: &str,
+    topic: &str
 ) -> (tungstenite::WebSocket<MaybeTlsStream<TcpStream>>, Comm) {
     let (mut kucoin_socket, _response) =
         connect(Url::parse(&url).unwrap()).expect("Can't connect.");
@@ -20,7 +20,7 @@ pub fn get_kucoin_socket(
         "type": "subscribe",
         "topic":"{}:{}"
     }}"#,
-        KUCOIN_DEPTH_SOCKET_TOPIC, market
+        topic, market
     );
 
     // Send the message
@@ -46,8 +46,9 @@ pub fn get_kucoin_socket(
 
 
 pub fn stream_kucoin_socket<T, F>(
-    market: &str,
     url: &str,
+    market: &str,
+    topic: &str,
     tx: Sender<(String, T)>,
     parse_and_send: F,
 )
@@ -55,7 +56,7 @@ pub fn stream_kucoin_socket<T, F>(
         T: Send + 'static,
         F: Fn(&str) -> T,
 {
-    let (mut kucoin_socket, mut ack) = get_kucoin_socket(market, url);
+    let (mut kucoin_socket, mut ack) = get_kucoin_socket(url,market, topic);
     let mut last_ping_time = std::time::Instant::now();
     loop {
         let read = kucoin_socket.read();
@@ -85,7 +86,7 @@ pub fn stream_kucoin_socket<T, F>(
             Err(e) => {
                 println!("Error during message handling: {:?}", e);
                 let (mut new_kucoin_socket, mut new_ack) =
-                    get_kucoin_socket(market, &get_kucoin_url());
+                    get_kucoin_socket(&get_kucoin_url(), market,  &topic);
                 std::mem::swap(&mut kucoin_socket, &mut new_kucoin_socket);
                 std::mem::swap(&mut ack, &mut new_ack);
                 continue;
