@@ -14,13 +14,11 @@ use bluefin::BluefinClient;
 use env::EnvVars;
 use kucoin::{Credentials, KuCoinClient};
 
-#[tokio::main]
-async fn main() {
+fn main() {
     // get env variables
     let vars: EnvVars = env::env_variables();
     env::init_logger(vars.log_level);
 
-    // create bluefin client
     let _ = BluefinClient::new(
         &vars.bluefin_wallet_key,
         &vars.bluefin_endpoint,
