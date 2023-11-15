@@ -116,8 +116,9 @@ pub mod client {
         ) {
             let url = self.get_kucoin_private_socket_url();
             stream_kucoin_socket(
-                market,
                 &url,
+                market,
+                &"/contractMarket/tradeOrders",
                 tx, // Sender channel of the appropriate type
                 |msg: &str| -> TradeOrderMessage {
                     let message: TradeOrderMessage =

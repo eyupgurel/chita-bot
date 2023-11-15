@@ -1,4 +1,5 @@
-use std::thread;
+use std::{fs, thread};
+use std::thread::JoinHandle;
 
 mod bluefin;
 mod constants;
@@ -10,41 +11,34 @@ mod sockets;
 mod tests;
 mod utils;
 use crate::market_maker::mm::{MarketMaker, MM};
-use bluefin::BluefinClient;
+
 use env::EnvVars;
-use kucoin::{Credentials, KuCoinClient};
+use crate::models::common::Markets;
+
 
 fn main() {
     // get env variables
     let vars: EnvVars = env::env_variables();
     env::init_logger(vars.log_level);
 
-    let _ = BluefinClient::new(
-        &vars.bluefin_wallet_key,
-        &vars.bluefin_endpoint,
-        &vars.bluefin_on_boarding_url,
-        &vars.bluefin_websocket_url,
-        vars.bluefin_leverage,
-    );
 
-    let _ = KuCoinClient::new(
-        Credentials::new(
-            &vars.kucoin_api_key,
-            &vars.kucoin_api_secret,
-            &vars.kucoin_api_phrase,
-        ),
-        &vars.kucoin_endpoint,
-        &vars.kukoin_on_boarding_url,
-        &vars.kucoin_websocket_url,
-        vars.kucoin_leverage,
-    );
+    let markets_config = fs::read_to_string("src/config/markets.json")
+        .expect("Unable to read markets.json");
+    let markets: Markets = serde_json::from_str(&markets_config)
+        .expect("JSON was not well-formatted");
 
-    // start connector
-    let handle_mm = thread::spawn(move || {
-        MM {}.connect();
-    });
+    // Create and collect thread handles using an iterator
+    let handles: Vec<JoinHandle<()>> = markets.markets.into_iter()
+        .map(|(_currency, market_map)| {
+            thread::spawn(move || {
+                MM::new(market_map).connect();
+            })
+        })
+        .collect();
 
-    handle_mm
-        .join()
-        .expect("market maker thread failed to join main");
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("market maker thread failed to join main");
+    }
+
 }

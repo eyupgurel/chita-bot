@@ -1,6 +1,13 @@
+use std::collections::HashMap;
 use std::fmt;
 use serde::{de, Deserialize, Deserializer};
 use serde::de::{SeqAccess, Visitor};
+
+#[derive(Deserialize)]
+pub struct Markets {
+    // Each currency symbol maps to its own HashMap of market pairs
+    pub markets: HashMap<String, HashMap<String, String>>,
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct OrderBook {
