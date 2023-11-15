@@ -21,12 +21,13 @@ use crate::sockets::kucoin_utils::get_kucoin_url;
 
 
 pub struct MM {
+    pub market_map: HashMap<&'static str, &'static str>,
     bluefin_client: BluefinClient,
     kucoin_client: KuCoinClient,
 }
 
 impl MM {
-    pub fn new() -> MM {
+    pub fn new(market_map: HashMap<&'static str, &'static str>) -> MM {
         let vars: EnvVars = env::env_variables();
         let bluefin_client = BluefinClient::new(
             &vars.bluefin_wallet_key,
@@ -49,6 +50,7 @@ impl MM {
         );
 
         MM {
+            market_map,
             bluefin_client,
             kucoin_client,
         }
@@ -76,11 +78,14 @@ impl MarketMaker for MM {
         let (tx_bluefin_ob, rx_bluefin_ob) = mpsc::channel();
         let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
 
+        let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
+        let kucoin_market_for_ob = kucoin_market.clone();
+
         let _handle_kucoin_ob = thread::spawn(move || {
 
             stream_kucoin_socket(
                 &get_kucoin_url(),
-                "XBTUSDTM",
+                &kucoin_market_for_ob.clone(),
                 &KUCOIN_DEPTH_SOCKET_TOPIC,
                 tx_kucoin_ob, // Sender channel of the appropriate type
                 |msg: &str| -> OrderBook {
@@ -93,22 +98,28 @@ impl MarketMaker for MM {
 
         });
 
+        let kucoin_market_for_ticker = kucoin_market.clone();
         let _handle_kucoin_ticker = thread::spawn(move || {
-            stream_kucoin_ticker_socket("XBTUSDTM", tx_kucoin_ticker);
+            stream_kucoin_ticker_socket(&kucoin_market_for_ticker.clone(), tx_kucoin_ticker);
         });
 
-        let _handle_binance_ob = thread::spawn(|| {
+        let binance_market = self.market_map.get("binance").expect("Binance key not found").to_owned();
+        let binance_market_for_ob = binance_market.clone();
+
+        let _handle_binance_ob = thread::spawn(move || {
             let ob_stream = BinanceOrderBookStream::<DepthUpdate>::new();
-            let market = "btcusdt".to_string();
-            let url = format!("{}/ws/{}@depth5@100ms", BINANCE_WSS_URL, market);
-            ob_stream.stream_ob_socket(&url, &market, tx_binance_ob, tx_binance_ob_diff);
+            let url = format!("{}/ws/{}@depth5@100ms", BINANCE_WSS_URL, &binance_market_for_ob);
+            ob_stream.stream_ob_socket(&url, &binance_market_for_ob, tx_binance_ob, tx_binance_ob_diff);
         });
 
-        let _handle_bluefin_ob = thread::spawn(|| {
+        let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+        let bluefin_market_for_ob = bluefin_market.clone();
+
+        let _handle_bluefin_ob = thread::spawn(move || {
             let ob_stream = BluefinOrderBookStream::<OrderbookDepthUpdate>::new();
             ob_stream.stream_ob_socket(
                 &BLUEFIN_WSS_URL,
-                "BTC-PERP",
+                &bluefin_market_for_ob.clone(),
                 tx_bluefin_ob,
                 tx_bluefin_ob_diff,
             );

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::thread;
 
 mod bluefin;
@@ -21,7 +22,13 @@ fn main() {
 
     // start connector
     let handle_mm = thread::spawn(move || {
-        MM::new().connect();
+
+        let market_map = HashMap::from([
+            ("binance", "btcusdt"),
+            ("kucoin", "XBTUSDTM"),
+            ("bluefin", "BTC-PERP"),
+        ]);
+        MM::new(market_map).connect();
     });
 
     handle_mm
