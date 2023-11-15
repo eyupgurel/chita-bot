@@ -21,31 +21,35 @@ fn main() {
     env::init_logger(vars.log_level);
 
 
-    // for every market we have a market maker living in a separate thread (will be moved to configuration)
-    let handle_eth_mm = thread::spawn(move || {
-        let market_map = HashMap::from([
+    // Consolidate market data into a single HashMap
+    let markets = HashMap::from([
+        ("ETH", HashMap::from([
             ("binance", "ethusdt"),
             ("kucoin", "ETHUSDTM"),
             ("bluefin", "ETH-PERP"),
-        ]);
-        MM::new(market_map).connect();
-    });
-
-/*    let handle_btc_mm = thread::spawn(move || {
-        let market_map = HashMap::from([
+        ])),
+        ("BTC", HashMap::from([
             ("binance", "btcusdt"),
             ("kucoin", "XBTUSDTM"),
             ("bluefin", "BTC-PERP"),
-        ]);
-        MM::new(market_map).connect();
-    });*/
+        ])),
+        // Add more markets as needed
+    ]);
 
-    handle_eth_mm
-        .join()
-        .expect("market maker thread failed to join main");
+    // Vector to store thread handles
+    let mut handles = vec![];
 
-/*    handle_btc_mm
-        .join()
-        .expect("market maker thread failed to join main");*/
+    // Create and store threads for each market
+    for (_currency, market_map) in markets {
+        let handle = thread::spawn(move || {
+            MM::new(market_map).connect();
+        });
+        handles.push(handle);
+    }
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("market maker thread failed to join main");
+    }
 
 }
