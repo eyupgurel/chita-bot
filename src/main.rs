@@ -31,7 +31,7 @@ fn main() {
     let mut handles = vec![];
 
     // Create and store threads for each market
-    for market_map in vec![markets.eth, markets.btc] {
+    for (currency, market_map) in markets.markets {
         let handle = thread::spawn(move || {
             MM::new(market_map).connect();
         });

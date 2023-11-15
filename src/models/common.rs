@@ -5,9 +5,8 @@ use serde::de::{SeqAccess, Visitor};
 
 #[derive(Deserialize)]
 pub struct Markets {
-    pub eth: HashMap<String, String>,
-    pub btc: HashMap<String, String>,
-    // Add more currencies as needed
+    // Each currency symbol maps to its own HashMap of market pairs
+    pub markets: HashMap<String, HashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
