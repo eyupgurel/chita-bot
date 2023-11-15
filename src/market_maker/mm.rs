@@ -21,13 +21,13 @@ use crate::sockets::kucoin_utils::get_kucoin_url;
 
 
 pub struct MM {
-    pub market_map: HashMap<&'static str, &'static str>,
+    pub market_map: HashMap<String, String>,
     bluefin_client: BluefinClient,
     kucoin_client: KuCoinClient,
 }
 
 impl MM {
-    pub fn new(market_map: HashMap<&'static str, &'static str>) -> MM {
+    pub fn new(market_map: HashMap<String, String>) -> MM {
         let vars: EnvVars = env::env_variables();
         let bluefin_client = BluefinClient::new(
             &vars.bluefin_wallet_key,

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::thread;
+use std::{fs, thread};
 
 mod bluefin;
 mod constants;
@@ -13,6 +13,7 @@ mod utils;
 use crate::market_maker::mm::{MarketMaker, MM};
 
 use env::EnvVars;
+use crate::models::common::Markets;
 
 
 fn main() {
@@ -21,26 +22,16 @@ fn main() {
     env::init_logger(vars.log_level);
 
 
-    // Consolidate market data into a single HashMap
-    let markets = HashMap::from([
-        ("ETH", HashMap::from([
-            ("binance", "ethusdt"),
-            ("kucoin", "ETHUSDTM"),
-            ("bluefin", "ETH-PERP"),
-        ])),
-        ("BTC", HashMap::from([
-            ("binance", "btcusdt"),
-            ("kucoin", "XBTUSDTM"),
-            ("bluefin", "BTC-PERP"),
-        ])),
-        // Add more markets as needed
-    ]);
+    let markets_config = fs::read_to_string("src/config/markets.json")
+        .expect("Unable to read markets.json");
+    let markets: Markets = serde_json::from_str(&markets_config)
+        .expect("JSON was not well-formatted");
 
     // Vector to store thread handles
     let mut handles = vec![];
 
     // Create and store threads for each market
-    for (_currency, market_map) in markets {
+    for market_map in vec![markets.eth, markets.btc] {
         let handle = thread::spawn(move || {
             MM::new(market_map).connect();
         });

@@ -1,6 +1,14 @@
+use std::collections::HashMap;
 use std::fmt;
 use serde::{de, Deserialize, Deserializer};
 use serde::de::{SeqAccess, Visitor};
+
+#[derive(Deserialize)]
+pub struct Markets {
+    pub eth: HashMap<String, String>,
+    pub btc: HashMap<String, String>,
+    // Add more currencies as needed
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct OrderBook {
