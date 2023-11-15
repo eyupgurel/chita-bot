@@ -9,13 +9,51 @@ use log::debug;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
+use crate::bluefin::BluefinClient;
+use crate::env;
+use crate::env::EnvVars;
+use crate::kucoin::{Credentials, KuCoinClient};
 
 use crate::models::common::{add, divide, subtract, BookOperations, OrderBook};
 use crate::models::kucoin_models::Level2Depth;
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
 
-pub struct MM {}
+
+pub struct MM {
+    bluefin_client: BluefinClient,
+    kucoin_client: KuCoinClient,
+}
+
+impl MM {
+    pub fn new() -> MM {
+        let vars: EnvVars = env::env_variables();
+        let bluefin_client = BluefinClient::new(
+            &vars.bluefin_wallet_key,
+            &vars.bluefin_endpoint,
+            &vars.bluefin_on_boarding_url,
+            &vars.bluefin_websocket_url,
+            vars.bluefin_leverage,
+        );
+
+        let kucoin_client = KuCoinClient::new(
+            Credentials::new(
+                &vars.kucoin_api_key,
+                &vars.kucoin_api_secret,
+                &vars.kucoin_api_phrase,
+            ),
+            &vars.kucoin_endpoint,
+            &vars.kukoin_on_boarding_url,
+            &vars.kucoin_websocket_url,
+            vars.kucoin_leverage,
+        );
+
+        MM {
+            bluefin_client,
+            kucoin_client,
+        }
+    }
+}
 
 pub trait MarketMaker {
     fn connect(&self);
