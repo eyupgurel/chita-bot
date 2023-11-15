@@ -2,7 +2,6 @@ use std::{fs, thread};
 use std::thread::JoinHandle;
 
 mod bluefin;
-mod constants;
 mod env;
 mod kucoin;
 mod market_maker;

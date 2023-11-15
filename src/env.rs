@@ -16,6 +16,9 @@ pub struct EnvVars {
     pub kucoin_api_secret: String,
     pub kucoin_api_phrase: String,
     pub kucoin_leverage: u128,
+    pub kucoin_depth_topic: String,
+    pub kucoin_ticker_v2_socket_topic:String,
+    pub binance_websocket_url:String,
     pub dry_run: bool,
     pub log_level: String,
 }
@@ -59,6 +62,14 @@ pub fn env_variables() -> EnvVars {
         .parse::<u128>()
         .unwrap();
 
+    let kucoin_depth_topic =  std::env::var("KUCOIN_DEPTH_SOCKET_TOPIC").expect("KUCOIN_DEPTH_SOCKET_TOPIC must be set.");
+
+    let kucoin_ticker_v2_socket_topic =  std::env::var("KUCOIN_TICKER_V2_SOCKET_TOPIC").expect("KUCOIN_TICKER_V2_SOCKET_TOPIC must be set.");
+
+    let binance_websocket_url =
+        std::env::var("BINANCE_WEB_SOCKET_URL").expect("BINANCE_WEB_SOCKET_URL must be set.");
+
+
     let dry_run = std::env::var("DRY_RUN").expect("DRY_RUN must be set.").parse::<bool>()
         .unwrap();
 
@@ -71,13 +82,16 @@ pub fn env_variables() -> EnvVars {
         bluefin_wallet_key,
         bluefin_websocket_url,
         bluefin_leverage,
-        kucoin_on_boarding_url: kucoin_on_boarding_url,
+        kucoin_on_boarding_url,
         kucoin_endpoint,
         kucoin_websocket_url,
         kucoin_api_key,
         kucoin_api_secret,
         kucoin_api_phrase,
         kucoin_leverage,
+        kucoin_depth_topic,
+        kucoin_ticker_v2_socket_topic,
+        binance_websocket_url,
         dry_run,
         log_level,
     };

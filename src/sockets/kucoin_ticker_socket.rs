@@ -1,4 +1,3 @@
-use crate::constants::KUCOIN_TICKERV2_SOCKET_TOPIC;
 use crate::models::kucoin_models::{Comm, TickerV2};
 use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 use std::net::TcpStream;
@@ -6,11 +5,15 @@ use std::sync::mpsc;
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
+use crate::env;
+use crate::env::EnvVars;
 
 pub fn get_kucoin_ticker_socket(
     market: &str,
     kucoin_futures_wss_url: &String,
 ) -> (tungstenite::WebSocket<MaybeTlsStream<TcpStream>>, Comm) {
+    let vars: EnvVars = env::env_variables();
+
     let (mut kucoin_ticker_socket, _response) =
         connect(Url::parse(&kucoin_futures_wss_url).unwrap()).expect("Can't connect.");
 
@@ -20,7 +23,7 @@ pub fn get_kucoin_ticker_socket(
         "type": "subscribe",
         "topic":"{}:{}"
     }}"#,
-        KUCOIN_TICKERV2_SOCKET_TOPIC, market
+        &vars.kucoin_ticker_v2_socket_topic, market
     );
 
     // Send the message

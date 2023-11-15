@@ -1,4 +1,3 @@
-use crate::constants::{BINANCE_WSS_URL, BLUEFIN_WSS_URL, KUCOIN_DEPTH_SOCKET_TOPIC};
 use crate::models::binance_models::DepthUpdate;
 use crate::models::bluefin_models::OrderbookDepthUpdate;
 use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
@@ -104,7 +103,7 @@ impl MarketMaker for MM {
             stream_kucoin_socket(
                 &get_kucoin_url(),
                 &kucoin_market_for_ob.clone(),
-                &KUCOIN_DEPTH_SOCKET_TOPIC,
+                &vars.kucoin_depth_topic,
                 tx_kucoin_ob, // Sender channel of the appropriate type
                 |msg: &str| -> OrderBook {
                 let parsed_kucoin_ob: Level2Depth =
@@ -126,7 +125,7 @@ impl MarketMaker for MM {
 
         let _handle_binance_ob = thread::spawn(move || {
             let ob_stream = BinanceOrderBookStream::<DepthUpdate>::new();
-            let url = format!("{}/ws/{}@depth5@100ms", BINANCE_WSS_URL, &binance_market_for_ob);
+            let url = format!("{}/ws/{}@depth5@100ms", &vars.binance_websocket_url, &binance_market_for_ob);
             ob_stream.stream_ob_socket(&url, &binance_market_for_ob, tx_binance_ob, tx_binance_ob_diff);
         });
 
@@ -136,7 +135,7 @@ impl MarketMaker for MM {
         let _handle_bluefin_ob = thread::spawn(move || {
             let ob_stream = BluefinOrderBookStream::<OrderbookDepthUpdate>::new();
             ob_stream.stream_ob_socket(
-                &BLUEFIN_WSS_URL,
+                &vars.bluefin_websocket_url,
                 &bluefin_market_for_ob.clone(),
                 tx_bluefin_ob,
                 tx_bluefin_ob_diff,

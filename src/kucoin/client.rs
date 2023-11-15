@@ -1,9 +1,5 @@
 pub mod client {
-    use crate::constants::KUCOIN_FUTURES_BASE_WSS_URL;
-    use crate::{
-        kucoin::models::{CallResponse, UserPosition},
-        utils,
-    };
+    use crate::{env, kucoin::models::{CallResponse, UserPosition}, utils};
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
@@ -13,6 +9,7 @@ pub mod client {
     use sha2::Sha256;
     use std::collections::HashMap;
     use std::time::Duration;
+    use crate::env::EnvVars;
 
     #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
@@ -101,8 +98,9 @@ pub mod client {
         }
 
         pub fn get_kucoin_private_socket_url(&self) -> String {
+            let vars: EnvVars = env::env_variables();
             let token = self.get_private_token();
-            let kucoin_futures_wss_url = format!("{}?token={}", KUCOIN_FUTURES_BASE_WSS_URL, token);
+            let kucoin_futures_wss_url = format!("{}?token={}", &vars.kucoin_websocket_url, token);
             kucoin_futures_wss_url
         }
 
