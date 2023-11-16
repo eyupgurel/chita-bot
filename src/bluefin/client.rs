@@ -26,7 +26,7 @@ pub mod client {
         api_gateway: String,
         onboarding_url: String,
         websocket_url: String,
-        auth_token: String,
+        pub auth_token: String,
         client: reqwest::blocking::Client,
         leverage: u128,
         markets: HashMap<String, String>,
