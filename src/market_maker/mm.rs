@@ -8,8 +8,7 @@ use log::{debug, error};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
-use serde_json::Value;
-use crate::bluefin::{BluefinClient, OrderUpdate};
+use crate::bluefin::{BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
 
@@ -17,8 +16,7 @@ use crate::models::common::{add, divide, subtract, BookOperations, OrderBook};
 use crate::models::kucoin_models::{Level2Depth};
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
-use crate::kucoin::{CallResponse, Credentials, KuCoinClient, TradeOrderMessage};
-use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
+use crate::kucoin::{CallResponse, Credentials, KuCoinClient};
 
 pub struct MM {
     pub market_map: HashMap<String, String>,
@@ -95,8 +93,6 @@ impl MarketMaker for MM {
         let (tx_binance_ob_diff, rx_binance_ob_diff) = mpsc::channel();
         let (tx_bluefin_ob, rx_bluefin_ob) = mpsc::channel();
         let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
-        let (tx_kucoin_of, rx_kucoin_of) = mpsc::channel();
-        let (tx_bluefin_of, _rx_bluefin_of) = mpsc::channel();
 
         let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
         let kucoin_market_for_ob = kucoin_market.clone();
@@ -145,46 +141,6 @@ impl MarketMaker for MM {
                 tx_bluefin_ob_diff,
             );
         });
-
-        let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
-
-        let kucoin_market_for_order_fill = kucoin_market.clone();
-        let _handle_kucoin_of = thread::spawn(move || {
-            stream_kucoin_socket(
-                &kucoin_private_socket_url,
-                &kucoin_market_for_order_fill,
-                &"/contractMarket/tradeOrders",
-                tx_kucoin_of, // Sender channel of the appropriate type
-                |msg: &str| -> TradeOrderMessage {
-                    let message: TradeOrderMessage =
-                        serde_json::from_str(&msg).expect("Can't parse");
-                    message
-                },
-            );
-        });
-
-        let bluefin_market_for_order_fill = bluefin_market.clone();
-        let bluefin_auth_token = self.bluefin_client.auth_token.clone();
-        let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
-
-        let _handle_bluefin_of = thread::spawn(move || {
-            stream_bluefin_private_socket(
-                &bluefin_websocket_url,
-                &bluefin_market_for_order_fill,
-                &bluefin_auth_token,
-                "OrderUpdate",
-                tx_bluefin_of, // Sender channel of the appropriate type
-                |msg: &str| -> OrderUpdate {
-
-                    let v: Value = serde_json::from_str(&msg).unwrap();
-                    let message: OrderUpdate =
-                        serde_json::from_str(&v["data"]["order"].to_string())
-                            .expect("Can't parse");
-                    message
-                },
-            );
-        });
-
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
 
@@ -287,29 +243,6 @@ impl MarketMaker for MM {
                     panic!("Bluefin worker has disconnected!");
                 }
             }
-
-            match rx_kucoin_of.try_recv() {
-                Ok((_key, value)) => {
-                    debug!("order response: {:?}", value);
-
-                    let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
-
-                    let is_buy = value.data.side == "sell";
-                    let order =
-                        self.bluefin_client.create_limit_ioc_order(&bluefin_market,  is_buy , false, value.data.price, value.data.filled_size, Some(vars.bluefin_leverage));
-
-                    let signature = self.bluefin_client.sign_order(order.clone());
-                    let _status = self.bluefin_client.post_signed_order(order.clone(), signature);
-
-                }
-                Err(mpsc::TryRecvError::Empty) => {
-                    // No message from binance yet
-                }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Bluefin worker has disconnected!");
-                }
-            }
-
             self.debug_ob_map(&ob_map);
         }
     }
