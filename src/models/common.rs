@@ -68,6 +68,26 @@ pub fn divide(dividend: &[f64], divisor: f64) -> Vec<f64> {
         .collect()
 }
 
+pub fn deserialize_optional_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+    where
+        D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => s.parse::<f64>().map(Some).map_err(de::Error::custom),
+        None => Ok(None),
+    }
+}
+
+pub fn deserialize_string_to_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
+    where
+        D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    s.parse::<f64>().map_err(de::Error::custom)
+}
+
 pub fn deserialize_as_string_tuples<'de, D>(deserializer: D) -> Result<Vec<(f64, f64)>, D::Error>
     where
         D: Deserializer<'de>,
