@@ -8,7 +8,8 @@ use log::{debug, error};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
-use crate::bluefin::BluefinClient;
+use serde_json::Value;
+use crate::bluefin::{BluefinClient, OrderUpdate};
 use crate::env;
 use crate::env::EnvVars;
 
@@ -17,6 +18,7 @@ use crate::models::kucoin_models::{Level2Depth};
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
 use crate::kucoin::{CallResponse, Credentials, KuCoinClient, TradeOrderMessage};
+use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 
 pub struct MM {
     pub market_map: HashMap<String, String>,
@@ -94,6 +96,7 @@ impl MarketMaker for MM {
         let (tx_bluefin_ob, rx_bluefin_ob) = mpsc::channel();
         let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
         let (tx_kucoin_of, rx_kucoin_of) = mpsc::channel();
+        let (tx_bluefin_of, _rx_bluefin_of) = mpsc::channel();
 
         let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
         let kucoin_market_for_ob = kucoin_market.clone();
@@ -132,10 +135,11 @@ impl MarketMaker for MM {
         let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
         let bluefin_market_for_ob = bluefin_market.clone();
 
+        let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
         let _handle_bluefin_ob = thread::spawn(move || {
             let ob_stream = BluefinOrderBookStream::<OrderbookDepthUpdate>::new();
             ob_stream.stream_ob_socket(
-                &vars.bluefin_websocket_url,
+                &bluefin_websocket_url,
                 &bluefin_market_for_ob.clone(),
                 tx_bluefin_ob,
                 tx_bluefin_ob_diff,
@@ -154,6 +158,28 @@ impl MarketMaker for MM {
                 |msg: &str| -> TradeOrderMessage {
                     let message: TradeOrderMessage =
                         serde_json::from_str(&msg).expect("Can't parse");
+                    message
+                },
+            );
+        });
+
+        let bluefin_market_for_order_fill = bluefin_market.clone();
+        let bluefin_auth_token = self.bluefin_client.auth_token.clone();
+        let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
+
+        let _handle_bluefin_of = thread::spawn(move || {
+            stream_bluefin_private_socket(
+                &bluefin_websocket_url,
+                &bluefin_market_for_order_fill,
+                &bluefin_auth_token,
+                "OrderUpdate",
+                tx_bluefin_of, // Sender channel of the appropriate type
+                |msg: &str| -> OrderUpdate {
+
+                    let v: Value = serde_json::from_str(&msg).unwrap();
+                    let message: OrderUpdate =
+                        serde_json::from_str(&v["data"]["order"].to_string())
+                            .expect("Can't parse");
                     message
                 },
             );
