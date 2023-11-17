@@ -296,8 +296,7 @@ pub mod client {
             ) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
                 let (mut bluefin_socket, _) =
                     connect(url::Url::parse(url.as_str()).unwrap()).expect("Failed to connect");
-
-                info!("Connected to Bluefin Websocket");
+                info!("Connected to Bluefin stream at url:{}.", &url);
 
                 let request = json!([
                     "SUBSCRIBE",

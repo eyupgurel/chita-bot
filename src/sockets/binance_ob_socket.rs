@@ -1,6 +1,6 @@
 use crate::models::common::OrderBook;
 use crate::sockets::common::OrderBookStream;
-use log::info;
+use log::{error, info};
 use serde::de::DeserializeOwned;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
@@ -29,7 +29,7 @@ where
     fn get_ob_socket(&self, url: &str, _market: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
         let (socket, _response) = connect(Url::parse(&url).unwrap()).expect("Can't connect.");
 
-        info!("Connected to binance stream.");
+        info!("Connected to Binance stream at url:{}.", &url);
         return socket;
     }
 
@@ -77,8 +77,8 @@ where
                             // Handle the Ping message, e.g., by sending a Pong response
                             socket.write(Message::Pong(ping_data)).unwrap();
                         },
-                        _ => {
-                            panic!("Error: Received unexpected message type");
+                        other => {
+                            error!("Error: Received unexpected message type: {:?}", other);
                         }
                     }
 

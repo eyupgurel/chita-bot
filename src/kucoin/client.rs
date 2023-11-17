@@ -195,9 +195,11 @@ pub mod client {
 
             if value["code"].to_string().eq("\"200000\"") {
                 eprintln!("Futures order placed successfully: {}", response_body);
+                let order_id = value["data"]["orderId"].to_string();
+                info!("order_id {}",order_id);
                 return CallResponse {
                     error: None,
-                    order_id: Some(value["data"]["orderId"].to_string()),
+                    order_id: Some(order_id),
                 };
             } else {
                 let error: Error =

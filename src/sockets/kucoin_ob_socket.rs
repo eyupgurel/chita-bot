@@ -2,6 +2,7 @@ use crate::models::kucoin_models::{Comm};
 use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
+use log::{error, info};
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::protocol::Message;
@@ -14,6 +15,7 @@ pub fn get_kucoin_socket(
 ) -> (tungstenite::WebSocket<MaybeTlsStream<TcpStream>>, Comm) {
     let (mut kucoin_socket, _response) =
         connect(Url::parse(&url).unwrap()).expect("Can't connect.");
+    info!("Connected to Kucoin stream at url:{}.", &url);
 
     // Construct the message
     let sub_message = format!(
@@ -86,8 +88,8 @@ pub fn stream_kucoin_socket<T, F>(
                         // Handle the Ping message, e.g., by sending a Pong response
                         socket.write(Message::Pong(ping_data)).unwrap();
                     },
-                    _ => {
-                        panic!("Error: Received unexpected message type");
+                    other => {
+                        error!("Error: Received unexpected message type: {:?}", other);
                     }
                 }
             }

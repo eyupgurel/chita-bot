@@ -4,6 +4,7 @@ use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
+use log::{error, info};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::protocol::Message;
 use tungstenite::{connect, WebSocket};
@@ -30,7 +31,7 @@ where
 {
     fn get_ob_socket(&self, url: &str, market: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
         let (mut socket, _response) = connect(Url::parse(url).unwrap()).expect("Can't connect.");
-
+        info!("Connected to Bluefin stream at url:{}.", &url);
         // Construct the message
         let sub_message = json!([
             "SUBSCRIBE",
@@ -109,8 +110,8 @@ where
                             // Handle the Ping message, e.g., by sending a Pong response
                             socket.write(Message::Pong(ping_data)).unwrap();
                         },
-                        _ => {
-                            panic!("Error: Received unexpected message type");
+                        other => {
+                            error!("Error: Received unexpected message type: {:?}", other);
                         }
                     }
 
