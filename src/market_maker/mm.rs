@@ -147,6 +147,7 @@ impl MarketMaker for MM {
         loop {
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
+                    debug!("kucoin ob: {:?}", value);
                     ob_map.insert(key.to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -159,7 +160,7 @@ impl MarketMaker for MM {
 
             match rx_kucoin_ticker.try_recv() {
                 Ok((key, value)) => {
-                    debug!("diff of {}: {:?}", key, value);
+                    debug!("kucoin ticker {}: {:?}", key, value);
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");

@@ -4,6 +4,7 @@ use std::net::TcpStream;
 use std::sync::mpsc;
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
+use tungstenite::protocol::Message;
 use url::Url;
 use crate::env;
 use crate::env::EnvVars;
@@ -48,55 +49,59 @@ pub fn get_kucoin_ticker_socket(
 }
 
 pub fn stream_kucoin_ticker_socket(market: &str, tx: mpsc::Sender<(String, TickerV2)>) {
-    let (mut kucoin_ticker_socket, mut ack) = get_kucoin_ticker_socket(market, &get_kucoin_url());
+    let (mut socket, mut ack) = get_kucoin_ticker_socket(market, &get_kucoin_url());
     let mut last_ping_time = std::time::Instant::now();
     let mut last_best_bid_price: Option<String> = None;
     let mut last_best_ask_price: Option<String> = None;
 
     loop {
-        let read = kucoin_ticker_socket.read();
+        let read = socket.read();
 
         match read {
             Ok(message) => {
-                let kucoin_socket_message = message;
 
-                let msg = match kucoin_socket_message {
-                    tungstenite::Message::Text(s) => s,
+                match message {
+                    Message::Text(msg) => {
+
+                        if msg.contains("pong") {
+                            continue;
+                        }
+
+                        let parsed_kucoin_ticker: TickerV2 =
+                            serde_json::from_str(&msg).expect("Can't parse");
+
+                        let price_changed = match &last_best_bid_price {
+                            Some(last_price) => &parsed_kucoin_ticker.data.best_bid_price != last_price,
+                            None => true,
+                        } || match &last_best_ask_price {
+                            Some(last_price) => &parsed_kucoin_ticker.data.best_ask_price != last_price,
+                            None => true,
+                        };
+
+                        if price_changed {
+                            tx.send(("kucoin_ticker".to_string(), parsed_kucoin_ticker.clone()))
+                                .unwrap();
+                            last_best_bid_price = Some(parsed_kucoin_ticker.data.best_bid_price.clone());
+                            last_best_ask_price = Some(parsed_kucoin_ticker.data.best_ask_price.clone());
+                        }
+
+                        send_ping(&mut socket, &mut ack, 50, &mut last_ping_time);
+                    },
+                    Message::Ping(ping_data) => {
+                        // Handle the Ping message, e.g., by sending a Pong response
+                        socket.write(Message::Pong(ping_data)).unwrap();
+                    },
                     _ => {
-                        panic!("Error getting text");
+                        panic!("Error: Received unexpected message type");
                     }
-                };
-
-                if msg.contains("pong") {
-                    continue;
                 }
-
-                let parsed_kucoin_ticker: TickerV2 =
-                    serde_json::from_str(&msg).expect("Can't parse");
-
-                let price_changed = match &last_best_bid_price {
-                    Some(last_price) => &parsed_kucoin_ticker.data.best_bid_price != last_price,
-                    None => true,
-                } || match &last_best_ask_price {
-                    Some(last_price) => &parsed_kucoin_ticker.data.best_ask_price != last_price,
-                    None => true,
-                };
-
-                if price_changed {
-                    tx.send(("kucoin_ticker".to_string(), parsed_kucoin_ticker.clone()))
-                        .unwrap();
-                    last_best_bid_price = Some(parsed_kucoin_ticker.data.best_bid_price.clone());
-                    last_best_ask_price = Some(parsed_kucoin_ticker.data.best_ask_price.clone());
-                }
-
-                send_ping(&mut kucoin_ticker_socket, &mut ack, 50,&mut last_ping_time);
             }
 
             Err(e) => {
                 println!("Error during message handling: {:?}", e);
                 let (mut new_kucoin_socket, mut new_ack) =
                     get_kucoin_ticker_socket(market, &get_kucoin_url());
-                std::mem::swap(&mut kucoin_ticker_socket, &mut new_kucoin_socket);
+                std::mem::swap(&mut socket, &mut new_kucoin_socket);
                 std::mem::swap(&mut ack, &mut new_ack);
                 continue;
             }
