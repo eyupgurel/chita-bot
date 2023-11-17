@@ -123,7 +123,7 @@ impl Hedger for HGR {
                     let is_buy = diff.is_positive();
 
                     let order =
-                        self.bluefin_client.create_limit_ioc_order(&bluefin_market, is_buy, false, value.data.avg_entry_price, order_quantity, Some(vars.bluefin_leverage));
+                        self.bluefin_client.create_limit_ioc_order(&bluefin_market, is_buy, false, value.data.avg_entry_price, order_quantity, None);
 
                     let signature = self.bluefin_client.sign_order(order.clone());
                     let _status = self.bluefin_client.post_signed_order(order.clone(), signature);
