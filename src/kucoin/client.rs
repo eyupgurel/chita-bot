@@ -12,6 +12,7 @@ pub mod client {
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
     use serde_json::{json, Value};
     use sha2::Sha256;
+    use snailquote::unescape;
     use std::collections::HashMap;
     use std::time::Duration;
 
@@ -195,8 +196,8 @@ pub mod client {
 
             if value["code"].to_string().eq("\"200000\"") {
                 eprintln!("Futures order placed successfully: {}", response_body);
-                let order_id = value["data"]["orderId"].to_string();
-                info!("order_id {}",order_id);
+                let order_id = unescape(value["data"]["orderId"].as_str().unwrap()).unwrap();
+                info!("order_id {}", order_id);
                 return CallResponse {
                     error: None,
                     order_id: Some(order_id),
