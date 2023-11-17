@@ -30,6 +30,7 @@ pub struct MM {
 impl MM {
     pub fn new(market_map: HashMap<String, String>) -> MM {
         let vars: EnvVars = env::env_variables();
+
         let bluefin_client = BluefinClient::new(
             &vars.bluefin_wallet_key,
             &vars.bluefin_endpoint,
@@ -49,6 +50,9 @@ impl MM {
             &vars.kucoin_websocket_url,
             vars.kucoin_leverage,
         );
+
+        let bluefin_market = market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+        kucoin_client.cancel_all_orders(Some(&bluefin_market));
 
         MM {
             market_map,
