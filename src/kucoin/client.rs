@@ -1,5 +1,10 @@
 pub mod client {
-    use crate::{env, kucoin::models::{CallResponse, UserPosition}, utils};
+    use crate::env::EnvVars;
+    use crate::{
+        env,
+        kucoin::models::{CallResponse, UserPosition},
+        utils,
+    };
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
@@ -9,7 +14,6 @@ pub mod client {
     use sha2::Sha256;
     use std::collections::HashMap;
     use std::time::Duration;
-    use crate::env::EnvVars;
 
     #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
@@ -234,23 +238,31 @@ pub mod client {
             }
         }
 
-        pub fn cancel_order_by_market(&self, market: &str) -> CallResponse {
-            let endpoint = String::from("/api/v1/orders");
+        pub fn cancel_all_orders(&self, market: Option<&str>) -> CallResponse {
+            let endpoint: String = String::from("/api/v1/orders");
+            let url: String;
+            let headers: HeaderMap;
             let mut params: HashMap<String, String> = HashMap::new();
 
-            let market_symbol = self.markets.get(market).unwrap();
+            if let Some(s) = market {
+                let market_symbol: &String = self.markets.get(s).unwrap();
+                params.insert(String::from("symbol"), market_symbol.to_owned());
+            };
 
-            params.insert(String::from("symbol"), market_symbol.to_owned());
-
-            let query = utils::format_query(&params);
-            let url = format!("{}{}{}", &self.api_gateway, endpoint, query);
-            let headers = self.sign_headers(endpoint, None, Some(query), Method::DELETE);
+            if !params.is_empty() {
+                let query = utils::format_query(&params);
+                url = format!("{}{}{}", &self.api_gateway, endpoint, query);
+                headers = self.sign_headers(endpoint, None, Some(query), Method::DELETE);
+            } else {
+                url = format!("{}{}", &self.api_gateway, endpoint);
+                headers = self.sign_headers(endpoint, None, None, Method::DELETE);
+            }
 
             let resp = self.client.delete(url).headers(headers).send().unwrap();
 
             if resp.status().is_success() {
                 let response_body = resp.text().unwrap();
-                println!("Order successfully cancelled for market: {}", market);
+                println!("Order successfully cancelled");
                 return CallResponse {
                     error: None,
                     order_id: None,
@@ -258,10 +270,7 @@ pub mod client {
             } else {
                 let error: Error =
                     serde_json::from_str(&resp.text().unwrap()).expect("JSON Decoding failed");
-                eprintln!(
-                    "Error cancelling orders for market({}): {:#?}",
-                    market, error
-                );
+                eprintln!("Error cancelling orders");
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
@@ -436,7 +445,7 @@ pub mod client {
     }
 
     #[test]
-    fn should_cancel_all_orders_for_market() {
+    fn should_cancel_all_orders_for_eth_market() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
@@ -447,8 +456,31 @@ pub mod client {
             3,
         );
 
-        client.cancel_order_by_market("ETH-PERP");
+        let resp = client.cancel_all_orders(Some("ETH-PERP"));
 
-        assert!(true, "Error cancelling the order");
+        assert!(
+            resp.error.is_none(),
+            "Error cancelling all orders for ETH market"
+        );
+    }
+
+    #[test]
+    fn should_cancel_all_orders_for_all_markets() {
+        let credentials = Credentials::new("1", "2", "3");
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        );
+
+        let resp = client.cancel_all_orders(None);
+
+        assert!(
+            resp.error.is_none(),
+            "Error cancelling all orders for all markets"
+        );
     }
 }
