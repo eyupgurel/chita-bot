@@ -8,7 +8,7 @@ pub mod client {
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
-    use log::info;
+    use log::{info, warn};
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
     use serde_json::{json, Value};
     use sha2::Sha256;
@@ -206,7 +206,7 @@ pub mod client {
                 let error: Error =
                     serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
-                eprintln!("Error placing futures order: {:#?}", error);
+                warn!("Error placing futures order: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
@@ -222,17 +222,19 @@ pub mod client {
 
             let resp = self.client.delete(url).headers(headers).send().unwrap();
 
-            if resp.status().is_success() {
-                let response_body = resp.text().unwrap();
-                println!("Order successfully cancelled: {}", response_body);
+            let response_body: String = resp.text().unwrap();
+            let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
+
+            if value["code"].to_string().eq("\"200000\"") {
+                info!("Order successfully cancelled: {}", response_body);
                 return CallResponse {
                     error: None,
                     order_id: None,
                 };
             } else {
                 let error: Error =
-                    serde_json::from_str(&resp.text().unwrap()).expect("JSON Decoding failed");
-                eprintln!("Error cancelling order: {:#?}", error);
+                    serde_json::from_str(response_body.as_str()).expect("JSON Decoding failed");
+                warn!("Error cancelling order: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
