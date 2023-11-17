@@ -4,7 +4,7 @@ use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
 use crate::sockets::bluefin_ob_socket::BluefinOrderBookStream;
 use crate::sockets::common::OrderBookStream;
 use crate::sockets::kucoin_ob_socket::{stream_kucoin_socket};
-use log::{debug, error};
+use log::{debug, error, info};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
@@ -181,6 +181,7 @@ impl MarketMaker for MM {
 
             match rx_binance_ob.try_recv() {
                 Ok(value) => {
+                    debug!("binance ob: {:?}", value);
                     ob_map.insert("binance".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -214,6 +215,7 @@ impl MarketMaker for MM {
 
             match rx_bluefin_ob.try_recv() {
                 Ok(value) => {
+                    debug!("bluefin ob: {:?}", value);
                     ob_map.insert("bluefin".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -270,11 +272,11 @@ impl MarketMaker for MM {
         prices_and_sizes: &(Vec<f64>, Vec<f64>)
     ) -> Option<(f64, u128)> {
         let (prices, sizes) = prices_and_sizes;
-
+        const SIZE_UPPER_BOUND: f64 = 2.0; // Defined the upper bound for size for a temporary measure
         // Check the first element of prices and sizes
         if let (Some(&price), Some(&size)) = (prices.first(), sizes.first()) {
             // Ensure the size is positive and non-zero
-            if size > 0.0 && size.is_sign_positive() {
+            if size > 0.0 && size.is_sign_positive() && size <= SIZE_UPPER_BOUND {
                 Some((price, size.floor() as u128))
             } else {
                 None
@@ -323,13 +325,16 @@ impl MarketMaker for MM {
         let dry_run = vars.dry_run;
 
         if can_place_order && !dry_run {
-            let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
+            let bluefin_market = self.market_map.get("bluefin").expect("Kucoin key not found").to_owned();
 
             if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
-                self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&kucoin_market, false, top_ask.0, top_ask.1);
+
+                info!("top ask to be posted as limit on Kucoin:{:?}",top_ask);
+                self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&bluefin_market, false, top_ask.0, top_ask.1);
             }
             if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
-                self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&kucoin_market, true, top_bid.0, top_bid.1);
+                info!("top ask to be posted as limit on Kucoin:{:?}",top_bid);
+                self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&bluefin_market, true, top_bid.0, top_bid.1);
             }
         }
     }
