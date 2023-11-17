@@ -190,19 +190,18 @@ pub mod client {
                 .send()
                 .unwrap();
 
-            if res.status().is_success() {
-                let response_body: String = res.text().unwrap();
-                info!("Futures order placed successfully: {}", response_body);
-                let value: Value =
-                    serde_json::from_str(&response_body).expect("JSON Decoding failed");
+            let response_body: String = res.text().unwrap();
+            let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
+            if value["code"].to_string().eq("\"200000\"") {
+                eprintln!("Futures order placed successfully: {}", response_body);
                 return CallResponse {
                     error: None,
                     order_id: Some(value["data"]["orderId"].to_string()),
                 };
             } else {
                 let error: Error =
-                    serde_json::from_str(&res.text().unwrap()).expect("JSON Decoding failed");
+                    serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
                 eprintln!("Error placing futures order: {:#?}", error);
                 return CallResponse {
@@ -403,7 +402,7 @@ pub mod client {
             3,
         );
 
-        let resp: CallResponse = client.place_limit_order("SUI-PERP", true, 0.58, 1);
+        let resp: CallResponse = client.place_limit_order("SUI-PERP", true, 0.70, 1);
 
         println!("Placed order with id: {}", resp.order_id.unwrap());
 
@@ -412,23 +411,6 @@ pub mod client {
 
     #[test]
     fn should_cancel_the_open_order_by_id() {
-        let credentials = Credentials::new("1", "2", "3");
-
-        let client = KuCoinClient::new(
-            credentials,
-            "https://api-futures.kucoin.com",
-            "https://api-futures.kucoin.com/api/v1/bullet-public",
-            "wss://ws-api-futures.kucoin.com/endpoint",
-            3,
-        );
-
-        client.cancel_order_by_id("12132131231");
-
-        assert!(true, "Error cancelling the order");
-    }
-
-    #[test]
-    fn should_cancel_the_open_order_by_id_1() {
         let credentials = Credentials::new("1", "2", "3");
 
         let client = KuCoinClient::new(
