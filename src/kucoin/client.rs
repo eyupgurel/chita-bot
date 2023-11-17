@@ -8,7 +8,7 @@ pub mod client {
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
-    use log::info;
+    use log::{debug, error, info};
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
     use serde_json::{json, Value};
     use sha2::Sha256;
@@ -195,9 +195,9 @@ pub mod client {
             let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                eprintln!("Futures order placed successfully: {}", response_body);
+                debug!("Futures order placed successfully: {}", response_body);
                 let order_id = unescape(value["data"]["orderId"].as_str().unwrap()).unwrap();
-                info!("order_id {}", order_id);
+                debug!("order_id {}", order_id);
                 return CallResponse {
                     error: None,
                     order_id: Some(order_id),
@@ -206,7 +206,7 @@ pub mod client {
                 let error: Error =
                     serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
-                eprintln!("Error placing futures order: {:#?}", error);
+                error!("Error placing futures order: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
@@ -224,7 +224,7 @@ pub mod client {
 
             if resp.status().is_success() {
                 let response_body = resp.text().unwrap();
-                println!("Order successfully cancelled: {}", response_body);
+                debug!("Order successfully cancelled: {}", response_body);
                 return CallResponse {
                     error: None,
                     order_id: None,
@@ -264,7 +264,7 @@ pub mod client {
 
             if resp.status().is_success() {
                 let response_body = resp.text().unwrap();
-                println!("Order successfully cancelled");
+                debug!("Order successfully cancelled");
                 return CallResponse {
                     error: None,
                     order_id: None,
