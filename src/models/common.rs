@@ -154,6 +154,11 @@ pub fn deserialize_as_bignumber_string_tuples<'de, D>(deserializer: D) -> Result
 
     Ok(number_tuples)
 }
+
+pub fn round_to_precision(value: f64, precision: i32) -> f64 {
+    let scale = 10f64.powi(precision);
+    (value * scale).round() / scale
+}
 // Define a custom error type
 #[derive(Error, Debug)]
 enum ConversionError {

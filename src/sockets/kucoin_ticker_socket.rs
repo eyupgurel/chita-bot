@@ -2,6 +2,7 @@ use crate::models::kucoin_models::{Comm, TickerV2};
 use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 use std::net::TcpStream;
 use std::sync::mpsc;
+use log::{error, info};
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::protocol::Message;
@@ -18,6 +19,7 @@ pub fn get_kucoin_ticker_socket(
     let (mut kucoin_ticker_socket, _response) =
         connect(Url::parse(&kucoin_futures_wss_url).unwrap()).expect("Can't connect.");
 
+    info!("Connected to Kucoin stream at url:{}.", &kucoin_futures_wss_url);
     // Construct the message
     let sub_message = format!(
         r#"{{
@@ -85,14 +87,14 @@ pub fn stream_kucoin_ticker_socket(market: &str, tx: mpsc::Sender<(String, Ticke
                             last_best_ask_price = Some(parsed_kucoin_ticker.data.best_ask_price.clone());
                         }
 
-                        send_ping(&mut socket, &mut ack, 50, &mut last_ping_time);
+                        send_ping(&mut socket, &mut ack, 18, &mut last_ping_time);
                     },
                     Message::Ping(ping_data) => {
                         // Handle the Ping message, e.g., by sending a Pong response
                         socket.write(Message::Pong(ping_data)).unwrap();
                     },
-                    _ => {
-                        panic!("Error: Received unexpected message type");
+                    other => {
+                        error!("Error: Received unexpected message type: {:?}", other);
                     }
                 }
             }

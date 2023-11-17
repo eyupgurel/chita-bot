@@ -2,6 +2,7 @@ use crate::models::kucoin_models::{Comm};
 use crate::sockets::kucoin_utils::{get_kucoin_url, send_ping};
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
+use log::{error, info};
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::protocol::Message;
@@ -14,6 +15,7 @@ pub fn get_kucoin_socket(
 ) -> (tungstenite::WebSocket<MaybeTlsStream<TcpStream>>, Comm) {
     let (mut kucoin_socket, _response) =
         connect(Url::parse(&url).unwrap()).expect("Can't connect.");
+    info!("Connected to Kucoin stream at url:{}.", &url);
 
     // Construct the message
     let sub_message = format!(
@@ -52,6 +54,7 @@ pub fn stream_kucoin_socket<T, F>(
     topic: &str,
     tx: Sender<(String, T)>,
     parse_and_send: F,
+    indicator:&str,
 )
     where
         T: Send + 'static,
@@ -66,6 +69,11 @@ pub fn stream_kucoin_socket<T, F>(
                 match message {
                     Message::Text(msg) => {
 
+                        // Skip the indicator check if indicator is empty
+                        if !indicator.is_empty() && !msg.contains(indicator) {
+                            continue;
+                        }
+
                         if msg.contains("pong") {
                             continue;
                         }
@@ -74,14 +82,14 @@ pub fn stream_kucoin_socket<T, F>(
 
                         tx.send(("kucoin".to_string(), data)).unwrap();
 
-                        send_ping(&mut socket, &mut ack, 50, &mut last_ping_time);
+                        send_ping(&mut socket, &mut ack, 18, &mut last_ping_time);
                     },
                     Message::Ping(ping_data) => {
                         // Handle the Ping message, e.g., by sending a Pong response
                         socket.write(Message::Pong(ping_data)).unwrap();
                     },
-                    _ => {
-                        panic!("Error: Received unexpected message type");
+                    other => {
+                        error!("Error: Received unexpected message type: {:?}", other);
                     }
                 }
             }

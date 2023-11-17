@@ -80,6 +80,7 @@ impl Hedger for HGR {
                         serde_json::from_str(&msg).expect("Can't parse");
                     message
                 },
+                "currentQty"
             );
         });
 
