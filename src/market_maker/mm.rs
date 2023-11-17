@@ -12,7 +12,7 @@ use crate::bluefin::{BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
 
-use crate::models::common::{add, divide, subtract, BookOperations, OrderBook};
+use crate::models::common::{add, divide, subtract, BookOperations, OrderBook, round_to_precision};
 use crate::models::kucoin_models::{Level2Depth};
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
@@ -114,6 +114,7 @@ impl MarketMaker for MM {
                 let ob: OrderBook = parsed_kucoin_ob.into();
                 ob
                 },
+                ""
             );
 
         });
@@ -337,11 +338,11 @@ impl MarketMaker for MM {
             if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
 
                 info!("top ask to be posted as limit on Kucoin:{:?}",top_ask);
-                self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&bluefin_market, false, top_ask.0, top_ask.1);
+                self.kucoin_ask_order_response = self.kucoin_client.place_limit_order(&bluefin_market, false, round_to_precision(top_ask.0,2), top_ask.1);
             }
             if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
                 info!("top ask to be posted as limit on Kucoin:{:?}",top_bid);
-                self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&bluefin_market, true, top_bid.0, top_bid.1);
+                self.kucoin_bid_order_response = self.kucoin_client.place_limit_order(&bluefin_market, true, round_to_precision(top_bid.0,2), top_bid.1);
             }
         }
     }

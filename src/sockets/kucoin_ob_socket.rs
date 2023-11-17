@@ -52,6 +52,7 @@ pub fn stream_kucoin_socket<T, F>(
     topic: &str,
     tx: Sender<(String, T)>,
     parse_and_send: F,
+    indicator:&str,
 )
     where
         T: Send + 'static,
@@ -65,6 +66,11 @@ pub fn stream_kucoin_socket<T, F>(
             Ok(message) => {
                 match message {
                     Message::Text(msg) => {
+
+                        // Skip the indicator check if indicator is empty
+                        if !indicator.is_empty() && !msg.contains(indicator) {
+                            continue;
+                        }
 
                         if msg.contains("pong") {
                             continue;
