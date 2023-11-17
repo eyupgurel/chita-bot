@@ -9,9 +9,12 @@ mod models;
 mod sockets;
 mod tests;
 mod utils;
+mod hedge;
+
 use crate::market_maker::mm::{MarketMaker, MM};
 
 use env::EnvVars;
+use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Markets;
 
 
@@ -27,7 +30,7 @@ fn main() {
         .expect("JSON was not well-formatted");
 
     // Create and collect thread handles using an iterator
-    let handles: Vec<JoinHandle<()>> = markets.markets.into_iter()
+    let mm_handles: Vec<JoinHandle<()>> = markets.markets.clone().into_iter()
         .map(|(_currency, market_map)| {
             thread::spawn(move || {
                 MM::new(market_map).connect();
@@ -35,9 +38,20 @@ fn main() {
         })
         .collect();
 
-    // Wait for all threads to complete
-    for handle in handles {
-        handle.join().expect("market maker thread failed to join main");
-    }
+    let hgr_handles: Vec<JoinHandle<()>> = markets.markets.clone().into_iter()
+        .map(|(_currency, market_map)| {
+            thread::spawn(move || {
+                HGR::new(market_map).connect();
+            })
+        })
+        .collect();
 
+
+    let mut combined_handles = mm_handles;
+    combined_handles.extend(hgr_handles);
+
+    // Wait for all threads to complete in one pass
+    combined_handles.into_iter().for_each(|handle| {
+        handle.join().expect("Thread failed to join main");
+    });
 }

@@ -2,6 +2,7 @@ use serde_json::json;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 use log::info;
+use tungstenite::protocol::Message;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, WebSocket};
 use url::Url;
@@ -53,23 +54,22 @@ pub fn stream_bluefin_private_socket<T, F>(
 
         match read {
             Ok(message) => {
-                let socket_message = message;
-
-                let msg = match socket_message {
-                    tungstenite::Message::Text(s) => s,
+                match message {
+                    Message::Text(s) => {
+                        if !s.contains(indicator) {
+                            continue;
+                        }
+                        let data: T = parse_and_send(&s);
+                        tx.send(data).unwrap();
+                    },
+                    Message::Ping(ping_data) => {
+                        // Handle the Ping message, e.g., by sending a Pong response
+                        socket.write(Message::Pong(ping_data)).unwrap();
+                    },
                     _ => {
-                        panic!("Error getting text");
+                        panic!("Error: Received unexpected message type");
                     }
-                };
-
-                if !msg.contains(indicator) {
-                    continue;
                 }
-
-                let data: T = parse_and_send(&msg);
-
-                tx.send(data).unwrap();
-
             }
 
             Err(e) => {

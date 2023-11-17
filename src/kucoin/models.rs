@@ -1,5 +1,7 @@
 use serde::Deserialize;
-use serde::de::{self, Deserializer};
+use serde_derive::Serialize;
+use crate::models::common::deserialize_optional_f64;
+use crate::models::common::deserialize_string_to_f64;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -105,28 +107,62 @@ pub struct TradeOrderData {
     pub ts: u128,
 }
 
-fn deserialize_optional_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
-    where
-        D: Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    match s {
-        Some(s) if s.is_empty() => Ok(None),
-        Some(s) => s.parse::<f64>().map(Some).map_err(de::Error::custom),
-        None => Ok(None),
-    }
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionChangeMessage {
+    #[serde(rename = "type")]
+    pub msg_type: String,
+    pub user_id: Option<String>, // Marked as deprecated, so it's optional
+    pub channel_type: String,
+    pub topic: String,
+    pub subject: String,
+    pub data: PositionChangeData,
 }
 
-fn deserialize_string_to_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
-    where
-        D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    s.parse::<f64>().map_err(de::Error::custom)
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionChangeData {
+    pub realised_gross_pnl: f64,
+    pub symbol: String,
+    pub cross_mode: bool,
+    pub liquidation_price: f64,
+    pub pos_loss: f64,
+    pub avg_entry_price: f64,
+    pub unrealised_pnl: f64,
+    pub mark_price: f64,
+    pub pos_margin: f64,
+    pub auto_deposit: bool,
+    pub risk_limit: i64,
+    pub unrealised_cost: f64,
+    pub pos_comm: f64,
+    pub pos_maint: f64,
+    pub pos_cost: f64,
+    pub maint_margin_req: f64,
+    pub bankrupt_price: f64,
+    pub realised_cost: f64,
+    pub mark_value: f64,
+    pub pos_init: f64,
+    pub realised_pnl: f64,
+    pub maint_margin: f64,
+    pub real_leverage: f64,
+    pub change_reason: String,
+    pub current_cost: f64,
+    pub opening_timestamp: i64,
+    pub current_qty: i32,
+    pub delev_percentage: f64,
+    pub current_comm: f64,
+    pub realised_gross_cost: f64,
+    pub is_open: bool,
+    pub pos_cross: f64,
+    pub current_timestamp: i64,
+    pub unrealised_roe_pcnt: f64,
+    pub unrealised_pnl_pcnt: f64,
+    pub settle_currency: String,
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::kucoin::models::PositionChangeMessage;
     use crate::kucoin::TradeOrderMessage;
 
     #[test]
@@ -146,5 +182,24 @@ mod tests {
 
         // Example assertion
         assert_eq!(parsed_message.type_field, "message");
+    }
+
+    #[test]
+    fn test_position_change_deserialization() {
+        use std::fs;
+
+        // Read the JSON string from the file
+        let json_str = fs::read_to_string("./src/tests/seed/kucoin/position-change.json")
+            .expect("Unable to read the file");
+
+        // Deserialize the JSON string into TradeOrderMessage struct
+        let parsed_message: PositionChangeMessage =
+            serde_json::from_str(&json_str).expect("Failed to parse the JSON");
+
+        // Print and assert or perform tests as necessary
+        println!("{:?}", parsed_message);
+
+        // Example assertion
+        assert_eq!(parsed_message.msg_type, "message");
     }
 }

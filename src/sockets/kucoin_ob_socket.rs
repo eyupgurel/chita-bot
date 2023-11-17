@@ -4,6 +4,7 @@ use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
+use tungstenite::protocol::Message;
 use url::Url;
 
 pub fn get_kucoin_socket(
@@ -56,38 +57,40 @@ pub fn stream_kucoin_socket<T, F>(
         T: Send + 'static,
         F: Fn(&str) -> T,
 {
-    let (mut kucoin_socket, mut ack) = get_kucoin_socket(url,market, topic);
+    let (mut socket, mut ack) = get_kucoin_socket(url, market, topic);
     let mut last_ping_time = std::time::Instant::now();
     loop {
-        let read = kucoin_socket.read();
-
+        let read = socket.read();
         match read {
             Ok(message) => {
-                let kucoin_socket_message = message;
+                match message {
+                    Message::Text(msg) => {
 
-                let msg = match kucoin_socket_message {
-                    tungstenite::Message::Text(s) => s,
+                        if msg.contains("pong") {
+                            continue;
+                        }
+
+                        let data: T = parse_and_send(&msg);
+
+                        tx.send(("kucoin".to_string(), data)).unwrap();
+
+                        send_ping(&mut socket, &mut ack, 50, &mut last_ping_time);
+                    },
+                    Message::Ping(ping_data) => {
+                        // Handle the Ping message, e.g., by sending a Pong response
+                        socket.write(Message::Pong(ping_data)).unwrap();
+                    },
                     _ => {
-                        panic!("Error getting text");
+                        panic!("Error: Received unexpected message type");
                     }
-                };
-
-                if msg.contains("pong") {
-                    continue;
                 }
-
-                let data: T = parse_and_send(&msg);
-
-                tx.send(("kucoin".to_string(), data)).unwrap();
-
-                send_ping(&mut kucoin_socket, &mut ack, 50, &mut last_ping_time);
             }
 
             Err(e) => {
                 println!("Error during message handling: {:?}", e);
                 let (mut new_kucoin_socket, mut new_ack) =
                     get_kucoin_socket(&get_kucoin_url(), market,  &topic);
-                std::mem::swap(&mut kucoin_socket, &mut new_kucoin_socket);
+                std::mem::swap(&mut socket, &mut new_kucoin_socket);
                 std::mem::swap(&mut ack, &mut new_ack);
                 continue;
             }

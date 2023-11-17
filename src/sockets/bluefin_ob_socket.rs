@@ -5,6 +5,7 @@ use serde_json::json;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 use tungstenite::stream::MaybeTlsStream;
+use tungstenite::protocol::Message;
 use tungstenite::{connect, WebSocket};
 use url::Url;
 
@@ -72,45 +73,47 @@ where
         let mut last_first_bid_price: Option<f64> = None;
 
         loop {
-            let socket_message;
             let read = socket.read();
 
             match read {
                 Ok(message) => {
-                    socket_message = message;
+                    match message {
+                        Message::Text(msg) => {
 
-                    let msg = match socket_message {
-                        tungstenite::Message::Text(s) => s,
+                            if !msg.contains("OrderbookDepthUpdate") {
+                                continue;
+                            }
+
+                            let parsed: T = serde_json::from_str(&msg).expect("Can't parse");
+                            let ob: OrderBook = parsed.into();
+
+                            let current_first_ask_price = ob.asks.first().map(|ask| ask.0.clone());
+                            let current_first_bid_price = ob.bids.first().map(|bid| bid.0.clone());
+
+                            let is_first_ask_price_changed =
+                                current_first_ask_price != last_first_ask_price;
+                            let is_first_bid_price_changed =
+                                current_first_bid_price != last_first_bid_price;
+
+                            if is_first_ask_price_changed || is_first_bid_price_changed {
+                                // Update the last known prices
+                                last_first_ask_price = current_first_ask_price;
+                                last_first_bid_price = current_first_bid_price;
+
+                                // Send the order book through the channel
+                                tx_diff.send(ob.clone()).unwrap();
+                            }
+                            tx.send(ob).unwrap();
+                        },
+                        Message::Ping(ping_data) => {
+                            // Handle the Ping message, e.g., by sending a Pong response
+                            socket.write(Message::Pong(ping_data)).unwrap();
+                        },
                         _ => {
-                            println!("Error getting text");
-                            continue;
+                            panic!("Error: Received unexpected message type");
                         }
-                    };
-
-                    if !msg.contains("OrderbookDepthUpdate") {
-                        continue;
                     }
 
-                    let parsed: T = serde_json::from_str(&msg).expect("Can't parse");
-                    let ob: OrderBook = parsed.into();
-
-                    let current_first_ask_price = ob.asks.first().map(|ask| ask.0.clone());
-                    let current_first_bid_price = ob.bids.first().map(|bid| bid.0.clone());
-
-                    let is_first_ask_price_changed =
-                        current_first_ask_price != last_first_ask_price;
-                    let is_first_bid_price_changed =
-                        current_first_bid_price != last_first_bid_price;
-
-                    if is_first_ask_price_changed || is_first_bid_price_changed {
-                        // Update the last known prices
-                        last_first_ask_price = current_first_ask_price;
-                        last_first_bid_price = current_first_bid_price;
-
-                        // Send the order book through the channel
-                        tx_diff.send(ob.clone()).unwrap();
-                    }
-                    tx.send(ob).unwrap();
                 }
                 Err(e) => {
                     println!("Error during message handling: {:?}", e);
