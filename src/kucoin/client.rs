@@ -195,7 +195,7 @@ pub mod client {
             let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                debug!("Futures order placed successfully: {}", response_body);
+                info!("Futures order placed successfully: {}", response_body);
                 let order_id = unescape(value["data"]["orderId"].as_str().unwrap()).unwrap();
                 debug!("order_id {}", order_id);
                 return CallResponse {
@@ -224,7 +224,7 @@ pub mod client {
 
             if resp.status().is_success() {
                 let response_body = resp.text().unwrap();
-                debug!("Order successfully cancelled: {}", response_body);
+                info!("Order successfully cancelled: {}", response_body);
                 return CallResponse {
                     error: None,
                     order_id: None,

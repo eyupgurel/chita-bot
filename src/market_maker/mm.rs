@@ -200,7 +200,7 @@ impl MarketMaker for MM {
 
             match rx_binance_ob_diff.try_recv() {
                 Ok(value) => {
-                    info!("diff of binance ob: {:?}", value);
+                    debug!("diff of binance ob: {:?}", value);
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
@@ -309,7 +309,7 @@ impl MarketMaker for MM {
             let order_id = self.kucoin_ask_order_response.order_id.clone().unwrap();
             match self.kucoin_client.cancel_order_by_id(&order_id) {
                 CallResponse { error: None, order_id } => {
-                    debug!("Successfully cancelled Kucoin ask order with ID: {:?}", order_id);
+                    info!("Successfully cancelled Kucoin ask order with ID: {:?}", order_id);
                 },
                 CallResponse { error: Some(e), .. } => {
                     error!("Error cancelling Kucoin ask order: Code: {}, Message: {}", e.code, e.msg);
@@ -322,7 +322,7 @@ impl MarketMaker for MM {
             let order_id = self.kucoin_bid_order_response.order_id.clone().unwrap();
             match self.kucoin_client.cancel_order_by_id(&order_id) {
                 CallResponse { error: None, order_id } => {
-                    debug!("Successfully cancelled Kucoin bid order with ID: {:?}", order_id);
+                    info!("Successfully cancelled Kucoin bid order with ID: {:?}", order_id);
                 },
                 CallResponse { error: Some(e), .. } => {
                     error!("Error cancelling Kucoin bid order: Code: {}, Message: {}", e.code, e.msg);
