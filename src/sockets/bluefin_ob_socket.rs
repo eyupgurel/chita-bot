@@ -45,7 +45,7 @@ where
 
         // Send the message
         socket
-            .send(tungstenite::protocol::Message::Text(
+            .send(Message::Text(
                 sub_message.to_string(),
             ))
             .unwrap();
@@ -53,7 +53,7 @@ where
         let read = socket.read().expect("Error reading message");
 
         let _ack_msg = match read {
-            tungstenite::Message::Text(s) => s,
+            Message::Text(s) => s,
             _ => {
                 panic!("Error getting text");
             }
