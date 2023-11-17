@@ -75,6 +75,7 @@ impl Hedger for HGR {
                 &topic,
                 tx_kucoin_pos_change, // Sender channel of the appropriate type
                 |msg: &str| -> PositionChangeMessage {
+                    info!("PositionChangeMessage essence:{}",msg);
                     let message: PositionChangeMessage =
                         serde_json::from_str(&msg).expect("Can't parse");
                     message
@@ -94,6 +95,7 @@ impl Hedger for HGR {
                 "PositionUpdate",
                 tx_bluefin_pos_change, // Sender channel of the appropriate type
                 |msg: &str| -> UserPosition {
+                    info!("UserPosition essence:{}",msg);
                     let v: Value = serde_json::from_str(&msg).unwrap();
                     let message =
                         parse_user_position(v["data"]["position"].clone());
