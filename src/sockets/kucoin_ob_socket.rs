@@ -95,7 +95,7 @@ pub fn stream_kucoin_socket<T, F>(
             }
 
             Err(e) => {
-                println!("Error during message handling: {:?}", e);
+                error!("Error during message handling: {:?}", e);
                 let (mut new_kucoin_socket, mut new_ack) =
                     get_kucoin_socket(&get_kucoin_url(), market,  &topic);
                 std::mem::swap(&mut socket, &mut new_kucoin_socket);

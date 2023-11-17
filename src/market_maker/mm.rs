@@ -200,7 +200,7 @@ impl MarketMaker for MM {
 
             match rx_binance_ob_diff.try_recv() {
                 Ok(value) => {
-                    debug!("diff of binance ob: {:?}", value);
+                    info!("diff of binance ob: {:?}", value);
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
