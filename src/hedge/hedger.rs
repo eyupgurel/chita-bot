@@ -66,7 +66,7 @@ impl Hedger for HGR {
         let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
         let kucoin_market_for_position_change = kucoin_market.clone();
         let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
-        let topic = format!("/contract/position:{}",kucoin_market_for_position_change);
+        let topic = format!("/contract/position");
 
         let _handle_kucoin_of = thread::spawn(move || {
             stream_kucoin_socket(
