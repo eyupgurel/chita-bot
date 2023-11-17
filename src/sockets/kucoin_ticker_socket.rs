@@ -87,7 +87,7 @@ pub fn stream_kucoin_ticker_socket(market: &str, tx: mpsc::Sender<(String, Ticke
                             last_best_ask_price = Some(parsed_kucoin_ticker.data.best_ask_price.clone());
                         }
 
-                        send_ping(&mut socket, &mut ack, 50, &mut last_ping_time);
+                        send_ping(&mut socket, &mut ack, 18, &mut last_ping_time);
                     },
                     Message::Ping(ping_data) => {
                         // Handle the Ping message, e.g., by sending a Pong response

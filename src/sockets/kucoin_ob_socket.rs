@@ -82,7 +82,7 @@ pub fn stream_kucoin_socket<T, F>(
 
                         tx.send(("kucoin".to_string(), data)).unwrap();
 
-                        send_ping(&mut socket, &mut ack, 50, &mut last_ping_time);
+                        send_ping(&mut socket, &mut ack, 18, &mut last_ping_time);
                     },
                     Message::Ping(ping_data) => {
                         // Handle the Ping message, e.g., by sending a Pong response
