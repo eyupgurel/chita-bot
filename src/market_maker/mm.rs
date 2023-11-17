@@ -30,6 +30,7 @@ pub struct MM {
 impl MM {
     pub fn new(market_map: HashMap<String, String>) -> MM {
         let vars: EnvVars = env::env_variables();
+
         let bluefin_client = BluefinClient::new(
             &vars.bluefin_wallet_key,
             &vars.bluefin_endpoint,
@@ -49,6 +50,9 @@ impl MM {
             &vars.kucoin_websocket_url,
             vars.kucoin_leverage,
         );
+
+        let bluefin_market = market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+        kucoin_client.cancel_all_orders(Some(&bluefin_market));
 
         MM {
             market_map,
@@ -302,23 +306,25 @@ impl MarketMaker for MM {
 
         if self.has_valid_kucoin_ask_order_id() {
             match self.kucoin_client.cancel_order_by_id(&self.kucoin_ask_order_response.order_id.clone().unwrap()) {
-                CallResponse { error: Some(e), .. } => {
-                    // Log the error and set flag to false
-                    error!("Error cancelling Kucoin ask order: {:?}", e);
-                    can_place_order = false;
+                CallResponse { error: None, order_id } => {
+                    info!("Successfully cancelled Kucoin ask order with ID: {:?}", order_id);
                 },
-                _ => {}
+                CallResponse { error: Some(e), .. } => {
+                    error!("Error cancelling Kucoin ask order: Code: {}, Message: {}", e.code, e.msg);
+                    can_place_order = false;
+                }
             }
         }
 
         if self.has_valid_kucoin_bid_order_id() {
             match self.kucoin_client.cancel_order_by_id(&self.kucoin_bid_order_response.order_id.clone().unwrap()) {
-                CallResponse { error: Some(e), .. } => {
-                    // Log the error and set flag to false
-                    error!("Error cancelling Kucoin bid order: {:?}", e);
-                    can_place_order = false;
+                CallResponse { error: None, order_id } => {
+                    info!("Successfully cancelled Kucoin bid order with ID: {:?}", order_id);
                 },
-                _ => {}
+                CallResponse { error: Some(e), .. } => {
+                    error!("Error cancelling Kucoin bid order: Code: {}, Message: {}", e.code, e.msg);
+                    can_place_order = false;
+                }
             }
         }
 
