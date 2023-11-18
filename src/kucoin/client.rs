@@ -8,7 +8,7 @@ pub mod client {
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
-    use log::{debug, error, info};
+    use log::{info, warn};
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
     use serde_json::{json, Value};
     use sha2::Sha256;
@@ -195,9 +195,9 @@ pub mod client {
             let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                info!("Futures order placed successfully: {}", response_body);
+                eprintln!("Futures order placed successfully: {}", response_body);
                 let order_id = unescape(value["data"]["orderId"].as_str().unwrap()).unwrap();
-                debug!("order_id {}", order_id);
+                info!("order_id {}", order_id);
                 return CallResponse {
                     error: None,
                     order_id: Some(order_id),
@@ -206,7 +206,7 @@ pub mod client {
                 let error: Error =
                     serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
-                error!("Error placing futures order: {:#?}", error);
+                warn!("Error placing futures order: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
@@ -222,8 +222,10 @@ pub mod client {
 
             let resp = self.client.delete(url).headers(headers).send().unwrap();
 
-            if resp.status().is_success() {
-                let response_body = resp.text().unwrap();
+            let response_body: String = resp.text().unwrap();
+            let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
+
+            if value["code"].to_string().eq("\"200000\"") {
                 info!("Order successfully cancelled: {}", response_body);
                 return CallResponse {
                     error: None,
@@ -231,8 +233,8 @@ pub mod client {
                 };
             } else {
                 let error: Error =
-                    serde_json::from_str(&resp.text().unwrap()).expect("JSON Decoding failed");
-                eprintln!("Error cancelling order: {:#?}", error);
+                    serde_json::from_str(response_body.as_str()).expect("JSON Decoding failed");
+                warn!("Error cancelling order: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
@@ -264,7 +266,7 @@ pub mod client {
 
             if resp.status().is_success() {
                 let response_body = resp.text().unwrap();
-                debug!("Order successfully cancelled");
+                println!("Order successfully cancelled");
                 return CallResponse {
                     error: None,
                     order_id: None,

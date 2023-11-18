@@ -305,31 +305,8 @@ impl MarketMaker for MM {
 
         let mut can_place_order = true;
 
-        if self.has_valid_kucoin_ask_order_id() {
-            let order_id = self.kucoin_ask_order_response.order_id.clone().unwrap();
-            match self.kucoin_client.cancel_order_by_id(&order_id) {
-                CallResponse { error: None, order_id } => {
-                    info!("Successfully cancelled Kucoin ask order with ID: {:?}", order_id);
-                },
-                CallResponse { error: Some(e), .. } => {
-                    error!("Error cancelling Kucoin ask order: Code: {}, Message: {}", e.code, e.msg);
-                    can_place_order = false;
-                }
-            }
-        }
-
-        if self.has_valid_kucoin_bid_order_id() {
-            let order_id = self.kucoin_bid_order_response.order_id.clone().unwrap();
-            match self.kucoin_client.cancel_order_by_id(&order_id) {
-                CallResponse { error: None, order_id } => {
-                    info!("Successfully cancelled Kucoin bid order with ID: {:?}", order_id);
-                },
-                CallResponse { error: Some(e), .. } => {
-                    error!("Error cancelling Kucoin bid order: Code: {}, Message: {}", e.code, e.msg);
-                    can_place_order = false;
-                }
-            }
-        }
+        let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+        self.kucoin_client.cancel_all_orders(Some(&bluefin_market));
 
         let vars: EnvVars = env::env_variables();
         let dry_run = vars.dry_run;
