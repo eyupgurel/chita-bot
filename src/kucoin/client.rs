@@ -8,7 +8,7 @@ pub mod client {
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
-    use log::{info, warn};
+    use log::{debug, info, warn};
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
     use serde_json::{json, Value};
     use sha2::Sha256;
@@ -266,7 +266,7 @@ pub mod client {
 
             if resp.status().is_success() {
                 let response_body = resp.text().unwrap();
-                println!("Order successfully cancelled");
+                debug!("Order successfully cancelled");
                 return CallResponse {
                     error: None,
                     order_id: None,

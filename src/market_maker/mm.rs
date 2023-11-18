@@ -303,11 +303,9 @@ impl MarketMaker for MM {
 
     fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>))) {
 
-        let mut can_place_order = true;
-
         let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
-        self.kucoin_client.cancel_all_orders(Some(&bluefin_market));
-
+        let res =self.kucoin_client.cancel_all_orders(Some(&bluefin_market));
+        let can_place_order = res.error.is_none();
         let vars: EnvVars = env::env_variables();
         let dry_run = vars.dry_run;
 
