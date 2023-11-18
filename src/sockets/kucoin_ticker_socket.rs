@@ -100,7 +100,7 @@ pub fn stream_kucoin_ticker_socket(market: &str, tx: mpsc::Sender<(String, Ticke
             }
 
             Err(e) => {
-                println!("Error during message handling: {:?}", e);
+                error!("Error during message handling: {:?}", e);
                 let (mut new_kucoin_socket, mut new_ack) =
                     get_kucoin_ticker_socket(market, &get_kucoin_url());
                 std::mem::swap(&mut socket, &mut new_kucoin_socket);

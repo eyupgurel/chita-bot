@@ -2,6 +2,7 @@ use crate::models::kucoin_models::Response;
 use reqwest;
 use crate::models::kucoin_models::{Comm};
 use std::net::TcpStream;
+use log::error;
 use tungstenite::{WebSocket};
 use tungstenite::stream::MaybeTlsStream;
 use crate::env;
@@ -24,7 +25,7 @@ pub fn get_kucoin_url() -> String {
     let _token = j
         .map(|response| response.data.token)
         .map_err(|e| {
-            println!("Error: {}", e);
+            error!("Error: {}", e);
             e
         })
         .unwrap();
