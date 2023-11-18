@@ -72,7 +72,7 @@ pub fn stream_bluefin_private_socket<T, F>(
             }
 
             Err(e) => {
-                println!("Error during message handling: {:?}", e);
+                error!("Error during message handling: {:?}", e);
                 let mut new_socket =
                     get_private_bluefin_socket(url, _market,  auth_token);
                 std::mem::swap(&mut socket, &mut new_socket);

@@ -305,31 +305,8 @@ impl MarketMaker for MM {
 
         let mut can_place_order = true;
 
-        if self.has_valid_kucoin_ask_order_id() {
-            let order_id = self.kucoin_ask_order_response.order_id.clone().unwrap();
-            match self.kucoin_client.cancel_order_by_id(&order_id) {
-                CallResponse { error: None, order_id } => {
-                    info!("Successfully cancelled Kucoin ask order with ID: {:?}", order_id);
-                },
-                CallResponse { error: Some(e), .. } => {
-                    error!("Error cancelling Kucoin ask order: Code: {}, Message: {}", e.code, e.msg);
-                    can_place_order = false;
-                }
-            }
-        }
-
-        if self.has_valid_kucoin_bid_order_id() {
-            let order_id = self.kucoin_bid_order_response.order_id.clone().unwrap();
-            match self.kucoin_client.cancel_order_by_id(&order_id) {
-                CallResponse { error: None, order_id } => {
-                    info!("Successfully cancelled Kucoin bid order with ID: {:?}", order_id);
-                },
-                CallResponse { error: Some(e), .. } => {
-                    error!("Error cancelling Kucoin bid order: Code: {}, Message: {}", e.code, e.msg);
-                    can_place_order = false;
-                }
-            }
-        }
+        let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+        self.kucoin_client.cancel_all_orders(Some(&bluefin_market));
 
         let vars: EnvVars = env::env_variables();
         let dry_run = vars.dry_run;
@@ -339,12 +316,12 @@ impl MarketMaker for MM {
 
             if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
 
-                info!("top ask to be posted as limit on Kucoin:{:?}",top_ask);
+                debug!("top ask to be posted as limit on Kucoin:{:?}",top_ask);
                 let ask_order_response = self.kucoin_client.place_limit_order(&bluefin_market, false, round_to_precision(top_ask.0,2), top_ask.1);
                 self.kucoin_ask_order_response = ask_order_response;
             }
             if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
-                info!("top ask to be posted as limit on Kucoin:{:?}",top_bid);
+                debug!("top ask to be posted as limit on Kucoin:{:?}",top_bid);
                 let bid_order_response = self.kucoin_client.place_limit_order(&bluefin_market, true, round_to_precision(top_bid.0,2), top_bid.1);
                 self.kucoin_bid_order_response = bid_order_response;
             }

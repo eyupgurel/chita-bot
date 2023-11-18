@@ -84,7 +84,7 @@ where
 
                 }
                 Err(e) => {
-                    println!("Error during message handling: {:?}", e);
+                    error!("Error during message handling: {:?}", e);
                     socket = self.get_ob_socket(url, market);
                 }
             }
