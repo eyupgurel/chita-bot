@@ -1,5 +1,6 @@
 use crate::sockets::kucoin_ob_socket::{stream_kucoin_socket};
 use std::collections::HashMap;
+use std::ops::Div;
 use std::sync::mpsc;
 use std::thread;
 use log::{debug, info};
@@ -54,7 +55,7 @@ impl HGR {
 
 pub trait Hedger{
     fn connect(&mut self);
-    fn u128_to_i32(value: u128) -> Result<i32, String>;
+    fn round_to_decimal_places(value: f64, places: u32) -> f64;
 }
 
 impl Hedger for HGR {
@@ -80,7 +81,8 @@ impl Hedger for HGR {
                         serde_json::from_str(&msg).expect("Can't parse");
                     message
                 },
-                "currentQty"
+                "currentQty",
+                true
             );
         });
 
@@ -111,17 +113,18 @@ impl Hedger for HGR {
                     debug!("order response: {:?}", value);
 
                     let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
-                    let target_quantity = value.data.current_qty * -1;
-                    let  bluefin_quantity = self.bluefin_position.quantity;
-                    let mut bluefin_quantity_i32 = HGR::u128_to_i32(bluefin_quantity).expect("error!");
+                    let current_qty : f64 = (value.data.current_qty as f64).div(100.0);
+                    let target_quantity = current_qty * -1.0;
+                    let mut bluefin_quantity = self.bluefin_position.quantity as f64;
+
                     if !self.bluefin_position.side {
-                        bluefin_quantity_i32 = bluefin_quantity_i32 * -1;
+                        bluefin_quantity = bluefin_quantity * -1.0;
                     }
-                    let diff = target_quantity - bluefin_quantity_i32;
+                    let diff = target_quantity - bluefin_quantity;
 
-                    let order_quantity = diff.abs() as f64;
+                    let order_quantity =  HGR::round_to_decimal_places( diff.abs(),2);
 
-                    let is_buy = diff.is_positive();
+                    let is_buy = diff.is_sign_positive();
 
                     let order =
                         self.bluefin_client.create_limit_ioc_order(&bluefin_market, is_buy, false, value.data.avg_entry_price, order_quantity, None);
@@ -154,11 +157,8 @@ impl Hedger for HGR {
 
     }
 
-    fn u128_to_i32(value: u128) -> Result<i32, String> {
-        if value <= i32::MAX as u128 {
-            Ok(value as i32)
-        } else {
-            Err("Value out of range for i32".to_string())
-        }
+    fn round_to_decimal_places(value: f64, places: u32) -> f64 {
+        let scale = 10_f64.powi(places as i32);
+        (value * scale).round() / scale
     }
 }

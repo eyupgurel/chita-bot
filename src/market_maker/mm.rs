@@ -114,7 +114,8 @@ impl MarketMaker for MM {
                 let ob: OrderBook = parsed_kucoin_ob.into();
                 ob
                 },
-                ""
+                "",
+                false
             );
 
         });
@@ -171,7 +172,12 @@ impl MarketMaker for MM {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
                         let mm = self.create_mm_pair(ref_ob, mm_ob, tkr_ob, -0.1);
-                        debug!("orders: {:?}", &mm);
+
+                        debug!("ref ob: {:?}", &ref_ob);
+                        debug!("mm ob: {:?}", &mm_ob);
+                        debug!("tkr_ob: {:?}", &tkr_ob);
+
+                        debug!("market making orders: {:?}", &mm);
 
                         self.place_maker_orders(&mm);
 
