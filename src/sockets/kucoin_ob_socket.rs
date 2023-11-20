@@ -7,23 +7,42 @@ use tungstenite::connect;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::protocol::Message;
 use url::Url;
+use rand::Rng;
+fn generate_random_number_of_digits(digits: u32) -> i64 {
+    if digits < 1 || digits > 18 {
+        panic!("Number of digits must be between 1 and 18");
+    }
 
+    let min = 10_i64.pow(digits - 1);
+    let max = 10_i64.pow(digits) - 1;
+    let mut rng = rand::thread_rng();
+
+    rng.gen_range(min..=max)
+}
 pub fn get_kucoin_socket(
     url: &str,
     market: &str,
-    topic: &str
+    topic: &str,
+    is_private:bool
 ) -> (tungstenite::WebSocket<MaybeTlsStream<TcpStream>>, Comm) {
     let (mut kucoin_socket, _response) =
         connect(Url::parse(&url).unwrap()).expect("Can't connect.");
     info!("Connected to Kucoin stream at url:{}.", &url);
 
+    let read = kucoin_socket.read().expect("Error reading message");
+
     // Construct the message
+    let id = generate_random_number_of_digits(13);
+
     let sub_message = format!(
         r#"{{
+        "id":{},
         "type": "subscribe",
-        "topic":"{}:{}"
+        "topic":"{}:{}",
+        "privateChannel": {},
+        "response": true
     }}"#,
-        topic, market
+        id, topic, market, is_private
     );
 
     // Send the message
@@ -55,12 +74,13 @@ pub fn stream_kucoin_socket<T, F>(
     tx: Sender<(String, T)>,
     parse_and_send: F,
     indicator:&str,
+    is_private:bool
 )
     where
         T: Send + 'static,
         F: Fn(&str) -> T,
 {
-    let (mut socket, mut ack) = get_kucoin_socket(url, market, topic);
+    let (mut socket, mut ack) = get_kucoin_socket(url, market, topic, is_private);
     let mut last_ping_time = std::time::Instant::now();
     loop {
         let read = socket.read();
@@ -97,7 +117,7 @@ pub fn stream_kucoin_socket<T, F>(
             Err(e) => {
                 error!("Error during message handling: {:?}", e);
                 let (mut new_kucoin_socket, mut new_ack) =
-                    get_kucoin_socket(&get_kucoin_url(), market,  &topic);
+                    get_kucoin_socket(&get_kucoin_url(), market,  &topic, is_private);
                 std::mem::swap(&mut socket, &mut new_kucoin_socket);
                 std::mem::swap(&mut ack, &mut new_ack);
                 continue;
