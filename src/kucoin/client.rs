@@ -153,7 +153,7 @@ pub mod client {
             let user_position: UserPosition =
                 serde_json::from_value(position["data"].clone()).unwrap();
 
-            println!("Got position: {:#?}", user_position);
+            debug!("Got position: {:#?}", user_position);
             return user_position;
         }
 
