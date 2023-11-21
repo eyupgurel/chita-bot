@@ -172,13 +172,15 @@ impl Hedger for HGR {
 
             let trunk = big_target - modulus;
 
-            let rounded_order_quantity = (trunk as f64).div(BIGNUMBER_BASE);
+            let rounded_order_quantity =   (trunk as f64).div(BIGNUMBER_BASE);
 
             let is_buy = diff.is_sign_positive();
 
-            if rounded_order_quantity >= 0.01 /* Min quantity for ETH (will need to take this value from config for BTC this will not work! */ {
+            let rv =  (rounded_order_quantity * 100.0).round() / 100.0;
+
+            if rv >= 0.01 /* Min quantity for ETH (will need to take this value from config for BTC this will not work! */ {
                 let order =
-                    self.bluefin_client.create_limit_ioc_order(&bluefin_market, is_buy, false, kucoin_position.avg_entry_price as f64, rounded_order_quantity, None);
+                    self.bluefin_client.create_limit_ioc_order(&bluefin_market, is_buy, false, kucoin_position.avg_entry_price as f64, rv, None);
                 info!("Order: {:#?}", order);
                 let signature = self.bluefin_client.sign_order(order.clone());
                 let status = self.bluefin_client.post_signed_order(order.clone(), signature);
