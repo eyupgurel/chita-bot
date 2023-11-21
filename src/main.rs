@@ -41,7 +41,7 @@ fn main() {
     let hgr_handles: Vec<JoinHandle<()>> = markets.markets.clone().into_iter()
         .map(|(_currency, market_map)| {
             thread::spawn(move || {
-                HGR::new(market_map).connect();
+                HGR::new(market_map).hedge();
             })
         })
         .collect();

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::ops::Div;
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 use log::{debug, info};
 use serde_json::Value;
 use crate::bluefin::{BluefinClient, parse_user_position, UserPosition};
@@ -10,6 +11,8 @@ use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{Credentials, KuCoinClient, PositionChangeMessage};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
+static BIGNUMBER_BASE: f64 = 1000000000000000000.0;
+static HEDGE_PERIOD_DURATION: u64 = 1;
 
 pub struct HGR {
     pub market_map: HashMap<String, String>,
@@ -21,6 +24,7 @@ pub struct HGR {
 impl HGR {
     pub fn new(market_map: HashMap<String, String>) -> HGR {
         let vars: EnvVars = env::env_variables();
+
         let bluefin_client = BluefinClient::new(
             &vars.bluefin_wallet_key,
             &vars.bluefin_endpoint,
@@ -55,7 +59,8 @@ impl HGR {
 
 pub trait Hedger{
     fn connect(&mut self);
-    fn round_to_decimal_places(value: f64, places: u32) -> f64;
+    fn hedge(&self);
+    fn hedge_pos(&self);
 }
 
 impl Hedger for HGR {
@@ -111,27 +116,7 @@ impl Hedger for HGR {
             match rx_kucoin_pos_change.try_recv() {
                 Ok((_key, value)) => {
                     debug!("order response: {:?}", value);
-
-                    let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
-                    let current_qty : f64 = (value.data.current_qty as f64).div(100.0);
-                    let target_quantity = current_qty * -1.0;
-                    let mut bluefin_quantity = self.bluefin_position.quantity as f64;
-
-                    if !self.bluefin_position.side {
-                        bluefin_quantity = bluefin_quantity * -1.0;
-                    }
-                    let diff = target_quantity - bluefin_quantity;
-
-                    let order_quantity =  HGR::round_to_decimal_places( diff.abs(),2);
-
-                    let is_buy = diff.is_sign_positive();
-
-                    let order =
-                        self.bluefin_client.create_limit_ioc_order(&bluefin_market, is_buy, false, value.data.avg_entry_price, order_quantity, None);
-
-                    let signature = self.bluefin_client.sign_order(order.clone());
-                    let _status = self.bluefin_client.post_signed_order(order.clone(), signature);
-
+                    self.hedge_pos();
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
@@ -157,8 +142,39 @@ impl Hedger for HGR {
 
     }
 
-    fn round_to_decimal_places(value: f64, places: u32) -> f64 {
-        let scale = 10_f64.powi(places as i32);
-        (value * scale).round() / scale
+    fn hedge(&self) {
+        loop{
+            self.hedge_pos();
+            // Sleep for one second before next iteration
+            thread::sleep(Duration::from_secs(HEDGE_PERIOD_DURATION));
+        }
+    }
+    fn hedge_pos(&self) {
+
+            let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+            let kucoin_position = self.kucoin_client.get_position(&bluefin_market);
+            let bluefin_position = self.bluefin_client.get_user_position(&bluefin_market);
+
+            let current_qty : f64 = (kucoin_position.quantity).div(100.0); // this is only valid for ETH parameterize it through config
+            let target_quantity = current_qty * -1.0;
+            let mut bluefin_quantity = (bluefin_position.quantity as f64).div(BIGNUMBER_BASE);
+
+            if !self.bluefin_position.side {
+                bluefin_quantity = bluefin_quantity * -1.0;
+            }
+            let diff = target_quantity - bluefin_quantity;
+
+            let order_quantity =  diff.abs();
+
+            let is_buy = diff.is_sign_positive();
+
+            if order_quantity >= 0.01 /* Min quantity for ETH (will need to take this value from config for BTC this will not work! */ {
+                let order =
+                    self.bluefin_client.create_limit_ioc_order(&bluefin_market, is_buy, false, kucoin_position.avg_entry_price as f64, order_quantity, None);
+                info!("Order: {:#?}", order);
+                let signature = self.bluefin_client.sign_order(order.clone());
+                let status = self.bluefin_client.post_signed_order(order.clone(), signature);
+                info!("{:?}", status);
+        }
     }
 }

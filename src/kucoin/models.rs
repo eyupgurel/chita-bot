@@ -43,15 +43,14 @@ pub struct UserPosition {
     pub symbol: String,
     // pub side: bool,
     #[serde(rename = "avgEntryPrice")]
-    pub avg_entry_price: u128,
+    pub avg_entry_price: f64,
 
     #[serde(rename = "currentQty")]
-    pub quantity: u128,
+    pub quantity: f64,
     // pub margin: u128,
     #[serde(rename = "realLeverage")]
-    pub leverage: u128,
+    pub leverage: f64,
 }
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Method {
