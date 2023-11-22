@@ -18,7 +18,7 @@ pub mod client {
         models::{
             parse_user_position, Auth, Error, OrderUpdate, PostResponse, UserPosition, Wallet,
         },
-        orders::{create_limit_ioc_order, to_order_request, Order},
+        orders::{create_order, to_order_request, Order},
     };
     use tungstenite::stream::MaybeTlsStream;
     pub struct BluefinClient {
@@ -235,13 +235,39 @@ pub mod client {
 
             let leverage = leverage.unwrap_or_else(|| self.leverage);
 
-            return create_limit_ioc_order(
+            return create_order(
                 self.wallet.address.clone(),
                 market.to_string(),
                 market_id,
                 is_buy,
                 reduce_only,
-                price,
+                Some(price),
+                quantity,
+                leverage,
+            );
+        }
+
+        pub fn create_market_order(
+            &self,
+            market: &str,
+            is_buy: bool,
+            reduce_only: bool,
+            quantity: f64,
+            leverage: Option<u128>,
+        ) -> Order {
+            // assuming market will exist in markets map
+            // TODO add if/else checks
+            let market_id = self.markets.get(market).unwrap().to_string();
+
+            let leverage = leverage.unwrap_or_else(|| self.leverage);
+
+            return create_order(
+                self.wallet.address.clone(),
+                market.to_string(),
+                market_id,
+                is_buy,
+                reduce_only,
+                None,
                 quantity,
                 leverage,
             );
@@ -493,6 +519,23 @@ pub mod client {
         let signature = bluefin_client.sign_order(order.clone());
         let status = bluefin_client.post_signed_order(order.clone(), signature);
 
+        assert!(status.error.is_none(), "Error while placing order");
+    }
+
+    #[test]
+    fn should_place_a_market_order() {
+        let bluefin_client = BluefinClient::new(
+            "c501312ca9eb1aaac6344edbe160e41d3d8d79570e6440f2a84f7d9abf462270",
+            "https://dapi.api.sui-staging.bluefin.io",
+            "https://testnet.bluefin.io",
+            "wss://notifications.api.sui-staging.bluefin.io",
+            3,
+        );
+
+        let order = bluefin_client.create_market_order("ETH-PERP", false, false, 0.01, None);
+
+        let signature = bluefin_client.sign_order(order.clone());
+        let status = bluefin_client.post_signed_order(order.clone(), signature);
         assert!(status.error.is_none(), "Error while placing order");
     }
 

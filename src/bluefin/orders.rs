@@ -141,22 +141,30 @@ pub fn get_serialized_order(order: &Order) -> String {
 // ----------------------------------------------------------------------------------- //
 //                                   PUBLIC METHODS                                    //
 // ----------------------------------------------------------------------------------- //
-pub fn create_limit_ioc_order(
+pub fn create_order(
     wallet_address: String,
     market_name: String,
     market_id: String,
     is_buy: bool,
     reduce_only: bool,
-    price: f64,
+    price: Option<f64>,
     quantity: f64,
     leverage: u128,
 ) -> Order {
+    let (order_price, order_type) = if price.is_some() {
+        (price.unwrap(), "LIMIT")
+    } else {
+        (0.0, "MARKET")
+    };
+
     let mut order = Order {
         market: market_name,
         isBuy: is_buy,
-        price: (Unit::Ether(&format!("{}", price)).to_wei_str().unwrap())
-            .parse()
-            .unwrap(),
+        price: (Unit::Ether(&format!("{}", order_price))
+            .to_wei_str()
+            .unwrap())
+        .parse()
+        .unwrap(),
         quantity: (Unit::Ether(&format!("{}", quantity)).to_wei_str().unwrap())
             .parse()
             .unwrap(),
@@ -170,7 +178,7 @@ pub fn create_limit_ioc_order(
         expiration: utils::get_current_time() + 100_000,
         salt: utils::get_random_number(),
         ioc: true,
-        orderType: "LIMIT".to_string(),
+        orderType: order_type.to_string(),
         timeInForce: "IOC".to_string(),
         hash: "".to_string(),
         serialized: "".to_string(),
