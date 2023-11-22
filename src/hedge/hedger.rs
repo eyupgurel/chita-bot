@@ -1,4 +1,3 @@
-use crate::sockets::kucoin_ob_socket::{stream_kucoin_socket};
 use std::collections::HashMap;
 use std::ops::Div;
 use std::sync::mpsc;
@@ -9,7 +8,7 @@ use serde_json::Value;
 use crate::bluefin::{BluefinClient, parse_user_position, UserPosition};
 use crate::env;
 use crate::env::EnvVars;
-use crate::kucoin::{Credentials, KuCoinClient, PositionChangeMessage};
+use crate::kucoin::{Credentials, KuCoinClient};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 static BIGNUMBER_BASE: f64 = 1000000000000000000.0;
 static HEDGE_PERIOD_DURATION: u64 = 1;
@@ -59,37 +58,15 @@ impl HGR {
 
 pub trait Hedger{
     fn connect(&mut self);
-    fn hedge(&self);
-    fn hedge_pos(&self);
+    fn hedge(&mut self);
+    fn hedge_pos(&mut self);
 }
 
 impl Hedger for HGR {
     fn connect(&mut self) {
         let vars: EnvVars = env::env_variables();
-        let (tx_kucoin_pos_change, rx_kucoin_pos_change) = mpsc::channel();
         let (tx_bluefin_pos_change, rx_bluefin_pos_change) = mpsc::channel();
 
-        let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
-        let kucoin_market_for_position_change = kucoin_market.clone();
-        let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
-        let topic = format!("/contract/position");
-
-        let _handle_kucoin_of = thread::spawn(move || {
-            stream_kucoin_socket(
-                &kucoin_private_socket_url,
-                &kucoin_market_for_position_change,
-                &topic,
-                tx_kucoin_pos_change, // Sender channel of the appropriate type
-                |msg: &str| -> PositionChangeMessage {
-                    info!("PositionChangeMessage essence:{}",msg);
-                    let message: PositionChangeMessage =
-                        serde_json::from_str(&msg).expect("Can't parse");
-                    message
-                },
-                "currentQty",
-                true
-            );
-        });
 
         let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
         let bluefin_market_for_order_fill = bluefin_market.clone();
@@ -103,7 +80,7 @@ impl Hedger for HGR {
                 "PositionUpdate",
                 tx_bluefin_pos_change, // Sender channel of the appropriate type
                 |msg: &str| -> UserPosition {
-                    info!("UserPosition essence:{}",msg);
+                    debug!("UserPosition essence:{}",msg);
                     let v: Value = serde_json::from_str(&msg).unwrap();
                     let message =
                         parse_user_position(v["data"]["position"].clone());
@@ -111,25 +88,13 @@ impl Hedger for HGR {
                 },
             );
         });
-
+        thread::sleep(Duration::from_secs(5));
+        self.hedge();
         loop{
-            match rx_kucoin_pos_change.try_recv() {
-                Ok((_key, value)) => {
-                    debug!("order response: {:?}", value);
-                    self.hedge_pos();
-                }
-                Err(mpsc::TryRecvError::Empty) => {
-                    // No message from binance yet
-                }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Bluefin worker has disconnected!");
-                }
-            }
-
             match rx_bluefin_pos_change.try_recv() {
                 Ok(value) => {
                     info!("position change: {:?}", value);
-                    self.bluefin_position = value;
+                    //self.bluefin_position = value;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
@@ -142,26 +107,27 @@ impl Hedger for HGR {
 
     }
 
-    fn hedge(&self) {
+    fn hedge(&mut self) {
         loop{
             self.hedge_pos();
             // Sleep for one second before next iteration
             thread::sleep(Duration::from_secs(HEDGE_PERIOD_DURATION));
         }
     }
-    fn hedge_pos(&self) {
+    fn hedge_pos(&mut self) {
 
             let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
             let kucoin_position = self.kucoin_client.get_position(&bluefin_market);
-            let bluefin_position = self.bluefin_client.get_user_position(&bluefin_market);
+            let current_kucoin_qty: f64 = (kucoin_position.quantity).div(100.0); // this is only valid for ETH parameterize it through config
+            info!("kucoin quantity:{}", current_kucoin_qty);
 
-            let current_qty : f64 = (kucoin_position.quantity).div(100.0); // this is only valid for ETH parameterize it through config
-            let target_quantity = current_qty * -1.0;
-            let mut bluefin_quantity = (bluefin_position.quantity as f64).div(BIGNUMBER_BASE);
+            let target_quantity = current_kucoin_qty * -1.0;
+            let mut bluefin_quantity = (self.bluefin_position.quantity as f64).div(BIGNUMBER_BASE);
 
             if !self.bluefin_position.side {
                 bluefin_quantity = bluefin_quantity * -1.0;
             }
+            info!("bluefin quantity:{}", bluefin_quantity);
             let diff = target_quantity - bluefin_quantity;
 
             let order_quantity = diff.abs();
@@ -177,6 +143,7 @@ impl Hedger for HGR {
             let is_buy = diff.is_sign_positive();
 
             let rv =  (rounded_order_quantity * 100.0).round() / 100.0;
+            info!("Order quantity:{} is buy:{}",rv, is_buy);
 
             if rv >= 0.01 /* Min quantity for ETH (will need to take this value from config for BTC this will not work! */ {
                 let order =
@@ -185,6 +152,16 @@ impl Hedger for HGR {
                 let signature = self.bluefin_client.sign_order(order.clone());
                 let status = self.bluefin_client.post_signed_order(order.clone(), signature);
                 info!("{:?}", status);
+
+                // Optimistic approach to prevent oscillations. For now update local position as if the position if filled immediately.
+                let bf_pos_sign: i128 = if self.bluefin_position.side {1} else {-1};
+                let bf_signed_pos:i128 = (self.bluefin_position.quantity as i128) * bf_pos_sign;
+                let order_pos_sign: i128 = if order.isBuy {1} else {-1};
+                let order_signed_pos:i128 = (order.quantity as i128) * order_pos_sign;
+                let new_pos = bf_signed_pos + order_signed_pos;
+
+                self.bluefin_position.quantity = new_pos.abs() as u128;
+                self.bluefin_position.side = if new_pos > 0 {true} else {false};
         }
     }
 }
