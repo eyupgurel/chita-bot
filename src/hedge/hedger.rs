@@ -180,7 +180,7 @@ impl Hedger for HGR {
 
             if rv >= 0.01 /* Min quantity for ETH (will need to take this value from config for BTC this will not work! */ {
                 let order =
-                    self.bluefin_client.create_limit_ioc_order(&bluefin_market, is_buy, false, kucoin_position.avg_entry_price as f64, rv, None);
+                    self.bluefin_client.create_market_order(&bluefin_market, is_buy, false,  rv, None);
                 info!("Order: {:#?}", order);
                 let signature = self.bluefin_client.sign_order(order.clone());
                 let status = self.bluefin_client.post_signed_order(order.clone(), signature);

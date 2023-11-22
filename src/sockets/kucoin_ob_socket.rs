@@ -29,7 +29,7 @@ pub fn get_kucoin_socket(
         connect(Url::parse(&url).unwrap()).expect("Can't connect.");
     info!("Connected to Kucoin stream at url:{}.", &url);
 
-    let read = kucoin_socket.read().expect("Error reading message");
+    let _read = kucoin_socket.read().expect("Error reading message");
 
     // Construct the message
     let id = generate_random_number_of_digits(13);
