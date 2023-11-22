@@ -4,6 +4,7 @@ use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
 use crate::sockets::bluefin_ob_socket::BluefinOrderBookStream;
 use crate::sockets::common::OrderBookStream;
 use crate::sockets::kucoin_ob_socket::{stream_kucoin_socket};
+#[allow(unused_imports)]
 use log::{debug, error, info};
 use std::collections::HashMap;
 use std::sync::mpsc;
