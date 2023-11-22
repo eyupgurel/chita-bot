@@ -10,6 +10,7 @@ mod sockets;
 mod tests;
 mod utils;
 mod hedge;
+mod config;
 
 use crate::market_maker::mm::{MarketMaker, MM};
 

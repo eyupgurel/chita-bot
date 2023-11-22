@@ -8,6 +8,7 @@ use tungstenite::protocol::Message;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, WebSocket};
 use url::Url;
+use crate::config::constants::MM_TRIGGER_BPS;
 
 pub struct BinanceOrderBookStream<T> {
     phantom: std::marker::PhantomData<T>, // Use PhantomData to indicate the generic type usage
@@ -58,16 +59,22 @@ where
                             let current_first_ask_price = ob.asks.first().map(|ask| ask.0.clone());
                             let current_first_bid_price = ob.bids.first().map(|bid| bid.0.clone());
 
-                            let is_first_ask_price_changed =
-                                current_first_ask_price != last_first_ask_price;
-                            let is_first_bid_price_changed =
-                                current_first_bid_price != last_first_bid_price;
+                            let is_first_ask_price_changed = match (current_first_ask_price, last_first_ask_price) {
+                                (Some(current), Some(last)) =>
+                                    (current - last).abs() / last * 10000.0 >= MM_TRIGGER_BPS,
+                                _ => false, // Consider unchanged if either current or last price is None
+                            };
+
+                            let is_first_bid_price_changed = match (current_first_bid_price, last_first_bid_price) {
+                                (Some(current), Some(last)) => (current - last).abs() / last * 10000.0 >= MM_TRIGGER_BPS,
+                                _ => false, // Consider unchanged if either current or last price is None
+                            };
+
+                            // Update the last known prices
+                            last_first_ask_price = current_first_ask_price;
+                            last_first_bid_price = current_first_bid_price;
 
                             if is_first_ask_price_changed || is_first_bid_price_changed {
-                                // Update the last known prices
-                                last_first_ask_price = current_first_ask_price;
-                                last_first_bid_price = current_first_bid_price;
-
                                 // Send the order book through the channel
                                 tx_diff.send(ob.clone()).unwrap();
                             }
