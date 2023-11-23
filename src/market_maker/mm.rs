@@ -299,8 +299,10 @@ impl MarketMaker for MM {
         // Check the first element of prices and sizes
         if let (Some(&price), Some(&size)) = (prices.first(), sizes.first()) {
             // Ensure the size is positive and non-zero
-            if size > 0.0 && size.is_sign_positive() && size <= self.market.mm_lot_upper_bound as f64 {
-                Some((price, size.floor() as u128))
+            if size.is_sign_positive() && size > 0.0 {
+                let lot_size = (size * self.market.lot_size).floor() as u128;
+                let order_size = if lot_size > self.market.mm_lot_upper_bound {self.market.mm_lot_upper_bound} else {lot_size};
+                Some((price, order_size))
             } else {
                 None
             }

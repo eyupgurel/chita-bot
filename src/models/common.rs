@@ -17,7 +17,7 @@ pub struct Symbol {
 #[derive(Deserialize, Debug, Clone)]
 pub struct Market {
     pub name: String,
-    pub mm_lot_upper_bound: u32,
+    pub mm_lot_upper_bound: u128,
     pub lot_size:f64,
     pub symbols: Symbol,
 }
