@@ -260,7 +260,7 @@ impl MarketMaker for MM {
 
     fn market_make(&mut self, ref_book: &OrderBook, mm_book: &OrderBook, tkr_book: &OrderBook, shift: f64) {
         let vars: EnvVars = env::env_variables();
-        if self.last_mm_instant.elapsed() >= Duration::from_secs(vars.market_making_time_throttle_period) {
+        if self.last_mm_instant.elapsed() >= Duration::from_millis(vars.market_making_time_throttle_period) {
             let mm = self.create_mm_pair(ref_book, mm_book, tkr_book, shift);
 
             debug!("ref ob: {:?}", &ref_book);
