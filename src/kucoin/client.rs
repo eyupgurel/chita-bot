@@ -63,7 +63,7 @@ pub mod client {
         ) -> KuCoinClient {
             let mut markets: HashMap<String, String> = HashMap::new();
             markets.insert("ETH-PERP".to_string(), "ETHUSDTM".to_string());
-            markets.insert("BTC-PERP".to_string(), "BTCUSDTM".to_string());
+            markets.insert("BTC-PERP".to_string(), "XBTUSDTM".to_string());
             markets.insert("SUI-PERP".to_string(), "SUIUSDTM".to_string());
 
             let client = reqwest::blocking::Client::builder()
