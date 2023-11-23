@@ -1,4 +1,4 @@
-use std::{fs, thread};
+use std::{fs, panic, process, thread};
 use std::thread::JoinHandle;
 
 mod bluefin;
@@ -20,6 +20,16 @@ use crate::models::common::Markets;
 
 
 fn main() {
+    // Set a custom global panic hook
+    panic::set_hook(Box::new(|info| {
+        // Log the panic information
+        eprintln!("Panic occurred: {:?}", info);
+
+        // Exit with a non-zero status code to indicate error
+        process::exit(1);
+    }));
+
+
     // get env variables
     let vars: EnvVars = env::env_variables();
     env::init_logger(vars.log_level);
