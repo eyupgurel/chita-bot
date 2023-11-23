@@ -1,0 +1,1 @@
+pub static MM_TRIGGER_BPS: f64 = 1.0;
