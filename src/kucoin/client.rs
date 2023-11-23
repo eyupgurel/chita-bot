@@ -126,7 +126,7 @@ pub mod client {
             return resp.data.token;
         }
 
-        pub fn get_position(&self, market: &str) -> UserPosition {
+        pub fn get_position(&self, market: &str) -> Option<UserPosition> {
             let endpoint = String::from("/api/v1/position");
             let market_symbol = self.markets.get(market).unwrap();
 
@@ -139,7 +139,7 @@ pub mod client {
             let headers: HeaderMap =
                 self.sign_headers(endpoint.clone(), None, Some(query), Method::GET);
 
-            let res = self
+            let res: String = self
                 .client
                 .get(url)
                 .headers(headers)
@@ -148,13 +148,21 @@ pub mod client {
                 .text()
                 .unwrap();
 
-            let position: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
+            let value: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
 
-            let user_position: UserPosition =
-                serde_json::from_value(position["data"].clone()).unwrap();
+            println!("Response: {:#?}", res);
 
-            debug!("Got position: {:#?}", user_position);
-            return user_position;
+            if value["code"].to_string().eq("\"200000\"") {
+                let user_position: UserPosition =
+                    serde_json::from_value(value["data"].clone()).unwrap();
+
+                debug!("Got position: {:#?}", user_position);
+                return Some(user_position);
+            } else {
+                let error: Error = serde_json::from_str(&res).expect("JSON Decoding failed");
+                warn!("Error getting kucoin position: {:#?}", error);
+                return None;
+            }
         }
 
         pub fn place_limit_order(
@@ -274,7 +282,7 @@ pub mod client {
             } else {
                 let error: Error =
                     serde_json::from_str(&resp.text().unwrap()).expect("JSON Decoding failed");
-                eprintln!("Error cancelling orders");
+                warn!("Error cancelling orders: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
