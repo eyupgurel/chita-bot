@@ -8,7 +8,8 @@ use tungstenite::protocol::Message;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, WebSocket};
 use url::Url;
-use crate::config::constants::MM_TRIGGER_BPS;
+use crate::env;
+use crate::env::EnvVars;
 
 pub struct BinanceOrderBookStream<T> {
     phantom: std::marker::PhantomData<T>, // Use PhantomData to indicate the generic type usage
@@ -41,6 +42,7 @@ where
         tx: Sender<OrderBook>,
         tx_diff: Sender<OrderBook>,
     ) {
+        let vars: EnvVars = env::env_variables();
         let mut socket = self.get_ob_socket(url, market);
         let mut last_first_ask_price: Option<f64> = None;
         let mut last_first_bid_price: Option<f64> = None;
@@ -61,12 +63,12 @@ where
 
                             let is_first_ask_price_changed = match (current_first_ask_price, last_first_ask_price) {
                                 (Some(current), Some(last)) =>
-                                    (current - last).abs() / last * 10000.0 >= MM_TRIGGER_BPS,
+                                    (current - last).abs() / last * 10000.0 >= vars.market_making_trigger_bps,
                                 _ => false, // Consider unchanged if either current or last price is None
                             };
 
                             let is_first_bid_price_changed = match (current_first_bid_price, last_first_bid_price) {
-                                (Some(current), Some(last)) => (current - last).abs() / last * 10000.0 >= MM_TRIGGER_BPS,
+                                (Some(current), Some(last)) => (current - last).abs() / last * 10000.0 >= vars.market_making_trigger_bps,
                                 _ => false, // Consider unchanged if either current or last price is None
                             };
 
