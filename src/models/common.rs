@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt;
 use serde::{de, Deserialize, Deserializer};
 use serde::de::{SeqAccess, Visitor};
@@ -6,10 +5,26 @@ use bigdecimal::{BigDecimal, ToPrimitive};
 use std::str::FromStr;
 use thiserror::Error;
 
-#[derive(Deserialize)]
-pub struct Markets {
-    // Each currency symbol maps to its own HashMap of market pairs
-    pub markets: HashMap<String, HashMap<String, String>>,
+// Define a struct for the symbol mappings for each market
+#[derive(Deserialize, Debug, Clone)]
+pub struct Symbol {
+    pub binance: String,
+    pub kucoin: String,
+    pub bluefin: String,
+}
+
+// Define a struct for each market entry
+#[derive(Deserialize, Debug, Clone)]
+pub struct Market {
+    pub name: String,
+    pub mm_lot_upper_bound: u32,
+    pub symbols: Symbol,
+}
+
+// Define the overall structure
+#[derive(Deserialize, Debug, Clone)]
+pub struct Config {
+    pub markets: Vec<Market>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

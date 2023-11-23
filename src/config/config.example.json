@@ -1,0 +1,22 @@
+{
+  "markets": [
+    {
+      "name": "eth",
+      "mm_lot_upper_bound": 100,
+      "symbols": {
+        "binance": "ethusdt",
+        "kucoin": "ETHUSDTM",
+        "bluefin": "ETH-PERP"
+      }
+    },
+    {
+      "name": "btc",
+      "mm_lot_upper_bound": 100,
+      "symbols": {
+        "binance": "btcusdt",
+        "kucoin": "XBTUSDTM",
+        "bluefin": "BTC-PERP"
+      }
+    }
+  ]
+}
