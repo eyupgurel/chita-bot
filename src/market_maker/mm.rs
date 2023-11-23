@@ -296,7 +296,7 @@ impl MarketMaker for MM {
         prices_and_sizes: &(Vec<f64>, Vec<f64>)
     ) -> Option<(f64, u128)> {
         let (prices, sizes) = prices_and_sizes;
-        const SIZE_UPPER_BOUND: f64 = 2.0; // Defined the upper bound for size for a temporary measure
+        const SIZE_UPPER_BOUND: f64 = 100.0; // Defined the upper bound for size for a temporary measure
         // Check the first element of prices and sizes
         if let (Some(&price), Some(&size)) = (prices.first(), sizes.first()) {
             // Ensure the size is positive and non-zero
@@ -331,13 +331,12 @@ impl MarketMaker for MM {
             let bluefin_market = self.market_map.get("bluefin").expect("Kucoin key not found").to_owned();
 
             if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
-
                 debug!("top ask to be posted as limit on Kucoin:{:?}",top_ask);
                 let ask_order_response = self.kucoin_client.place_limit_order(&bluefin_market, false, round_to_precision(top_ask.0,2), top_ask.1);
                 self.kucoin_ask_order_response = ask_order_response;
             }
             if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
-                debug!("top ask to be posted as limit on Kucoin:{:?}",top_bid);
+                debug!("top bid to be posted as limit on Kucoin:{:?}",top_bid);
                 let bid_order_response = self.kucoin_client.place_limit_order(&bluefin_market, true, round_to_precision(top_bid.0,2), top_bid.1);
                 self.kucoin_bid_order_response = bid_order_response;
             }
