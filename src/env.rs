@@ -20,6 +20,8 @@ pub struct EnvVars {
     pub kucoin_ticker_v2_socket_topic:String,
     pub binance_websocket_url:String,
     pub dry_run: bool,
+    pub market_making_trigger_bps:f64,
+    pub market_making_time_throttle_period:u64,
     pub log_level: String,
 }
 
@@ -73,6 +75,18 @@ pub fn env_variables() -> EnvVars {
     let dry_run = std::env::var("DRY_RUN").expect("DRY_RUN must be set.").parse::<bool>()
         .unwrap();
 
+    let market_making_trigger_bps = std::env::var("MARKET_MAKING_TRIGGER_BPS")
+        .expect("MARKET_MAKING_TRIGGER_BPS be set.")
+        .parse::<f64>()
+        .unwrap();
+
+
+    let market_making_time_throttle_period = std::env::var("MARKET_MAKING_TIME_THROTTLE_PERIOD")
+        .expect("MARKET_MAKING_TIME_THROTTLE_PERIOD be set.")
+        .parse::<u64>()
+        .unwrap();
+
+
     // misc
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
 
@@ -93,6 +107,8 @@ pub fn env_variables() -> EnvVars {
         kucoin_ticker_v2_socket_topic,
         binance_websocket_url,
         dry_run,
+        market_making_trigger_bps,
+        market_making_time_throttle_period,
         log_level,
     };
 }

@@ -9,6 +9,7 @@ use log::{debug, error, info};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
+use std::time::{Duration, Instant};
 use crate::bluefin::{BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
@@ -26,6 +27,7 @@ pub struct MM {
     kucoin_client: KuCoinClient,
     kucoin_ask_order_response: CallResponse,
     kucoin_bid_order_response: CallResponse,
+    last_mm_instant: Instant,
 }
 
 impl MM {
@@ -61,12 +63,20 @@ impl MM {
             kucoin_client,
             kucoin_ask_order_response: CallResponse { error: None, order_id: None },
             kucoin_bid_order_response: CallResponse { error: None, order_id: None },
+            last_mm_instant: Instant::now(),
         }
     }
 }
 
 pub trait MarketMaker {
     fn connect(&mut self);
+    fn market_make(
+        &mut self,
+        ref_book: &OrderBook,
+        mm_book: &OrderBook,
+        tkr_book: &OrderBook,
+        shift: f64,
+    );
     fn create_mm_pair(
         &self,
         ref_book: &OrderBook,
@@ -172,16 +182,7 @@ impl MarketMaker for MM {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        let mm = self.create_mm_pair(ref_ob, mm_ob, tkr_ob, -0.1);
-
-                        debug!("ref ob: {:?}", &ref_ob);
-                        debug!("mm ob: {:?}", &mm_ob);
-                        debug!("tkr_ob: {:?}", &tkr_ob);
-
-                        debug!("market making orders: {:?}", &mm);
-
-                        self.place_maker_orders(&mm);
-
+                        self.market_make(ref_ob, mm_ob, tkr_ob, -0.1);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -211,10 +212,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        let mm = self.create_mm_pair(&value, mm_ob, tkr_ob, -0.1);
-                        debug!("orders: {:?}", mm);
-
-                        self.place_maker_orders(&mm);
+                        self.market_make(&value, mm_ob, tkr_ob, -0.1);
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -245,9 +243,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
-                        let mm = self.create_mm_pair(ref_ob, mm_ob, &value, -0.1);
-                        debug!("orders {:?}", mm);
-                        self.place_maker_orders(&mm);
+                        self.market_make(ref_ob, mm_ob, &value, -0.1);
                     }
                     ob_map.insert("bluefin".to_string(), value);
                 }
@@ -259,6 +255,21 @@ impl MarketMaker for MM {
                 }
             }
             self.debug_ob_map(&ob_map);
+        }
+    }
+
+    fn market_make(&mut self, ref_book: &OrderBook, mm_book: &OrderBook, tkr_book: &OrderBook, shift: f64) {
+        let vars: EnvVars = env::env_variables();
+        if self.last_mm_instant.elapsed() >= Duration::from_secs(vars.market_making_time_throttle_period) {
+            let mm = self.create_mm_pair(ref_book, mm_book, tkr_book, shift);
+
+            debug!("ref ob: {:?}", &ref_book);
+            debug!("mm ob: {:?}", &mm_book);
+            debug!("tkr_ob: {:?}", &tkr_book);
+            info!("market making orders: {:?}", &mm);
+
+            self.place_maker_orders(&mm);
+            self.last_mm_instant = Instant::now();
         }
     }
 
