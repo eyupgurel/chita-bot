@@ -14,14 +14,14 @@ use crate::bluefin::{BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
 
-use crate::models::common::{add, divide, subtract, BookOperations, OrderBook, round_to_precision};
+use crate::models::common::{add, divide, subtract, BookOperations, OrderBook, round_to_precision, Market};
 use crate::models::kucoin_models::{Level2Depth};
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
 use crate::kucoin::{CallResponse, Credentials, KuCoinClient};
 
 pub struct MM {
-    pub market_map: HashMap<String, String>,
+    pub market: Market,
     #[allow(dead_code)]
     bluefin_client: BluefinClient,
     kucoin_client: KuCoinClient,
@@ -31,7 +31,7 @@ pub struct MM {
 }
 
 impl MM {
-    pub fn new(market_map: HashMap<String, String>) -> MM {
+    pub fn new(market: Market) -> MM {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -54,11 +54,11 @@ impl MM {
             vars.kucoin_leverage,
         );
 
-        let bluefin_market = market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+        let bluefin_market = market.symbols.bluefin.to_owned();
         kucoin_client.cancel_all_orders(Some(&bluefin_market));
 
         MM {
-            market_map,
+            market,
             bluefin_client,
             kucoin_client,
             kucoin_ask_order_response: CallResponse { error: None, order_id: None },
@@ -109,7 +109,7 @@ impl MarketMaker for MM {
         let (tx_bluefin_ob, rx_bluefin_ob) = mpsc::channel();
         let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
 
-        let kucoin_market = self.market_map.get("kucoin").expect("Kucoin key not found").to_owned();
+        let kucoin_market = self.market.symbols.kucoin.to_owned();
         let kucoin_market_for_ob = kucoin_market.clone();
 
         let _handle_kucoin_ob = thread::spawn(move || {
@@ -136,7 +136,7 @@ impl MarketMaker for MM {
             stream_kucoin_ticker_socket(&kucoin_market_for_ticker.clone(), tx_kucoin_ticker);
         });
 
-        let binance_market = self.market_map.get("binance").expect("Binance key not found").to_owned();
+        let binance_market = self.market.symbols.binance.to_owned();
         let binance_market_for_ob = binance_market.clone();
 
         let _handle_binance_ob = thread::spawn(move || {
@@ -145,7 +145,7 @@ impl MarketMaker for MM {
             ob_stream.stream_ob_socket(&url, &binance_market_for_ob, tx_binance_ob, tx_binance_ob_diff);
         });
 
-        let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+        let bluefin_market = self.market.symbols.bluefin.to_owned();
         let bluefin_market_for_ob = bluefin_market.clone();
 
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
@@ -296,11 +296,10 @@ impl MarketMaker for MM {
         prices_and_sizes: &(Vec<f64>, Vec<f64>)
     ) -> Option<(f64, u128)> {
         let (prices, sizes) = prices_and_sizes;
-        const SIZE_UPPER_BOUND: f64 = 100.0; // Defined the upper bound for size for a temporary measure
         // Check the first element of prices and sizes
         if let (Some(&price), Some(&size)) = (prices.first(), sizes.first()) {
             // Ensure the size is positive and non-zero
-            if size > 0.0 && size.is_sign_positive() && size <= SIZE_UPPER_BOUND {
+            if size > 0.0 && size.is_sign_positive() && size <= self.market.mm_lot_upper_bound as f64 {
                 Some((price, size.floor() as u128))
             } else {
                 None
@@ -321,14 +320,14 @@ impl MarketMaker for MM {
 
     fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>))) {
 
-        let bluefin_market = self.market_map.get("bluefin").expect("Bluefin key not found").to_owned();
+        let bluefin_market = self.market.symbols.bluefin.to_owned();
         let res =self.kucoin_client.cancel_all_orders(Some(&bluefin_market));
         let can_place_order = res.error.is_none();
         let vars: EnvVars = env::env_variables();
         let dry_run = vars.dry_run;
 
         if can_place_order && !dry_run {
-            let bluefin_market = self.market_map.get("bluefin").expect("Kucoin key not found").to_owned();
+            let bluefin_market = self.market.symbols.bluefin.to_owned();
 
             if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
                 debug!("top ask to be posted as limit on Kucoin:{:?}",top_ask);

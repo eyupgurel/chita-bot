@@ -17,4 +17,4 @@ src/.DS_Store
 .idea
 .vscode
 .env
-/src/config/markets.json
+/src/config/config.json

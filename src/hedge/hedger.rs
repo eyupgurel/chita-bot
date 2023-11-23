@@ -5,23 +5,24 @@ use crate::kucoin::{Credentials, KuCoinClient};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use log::{debug, info};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::ops::Div;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+use crate::models::common::Market;
+
 static BIGNUMBER_BASE: f64 = 1000000000000000000.0;
 static HEDGE_PERIOD_DURATION: u64 = 1;
 
 pub struct HGR {
-    pub market_map: HashMap<String, String>,
+    pub market: Market,
     bluefin_client: BluefinClient,
     kucoin_client: KuCoinClient,
     bluefin_position: UserPosition,
 }
 
 impl HGR {
-    pub fn new(market_map: HashMap<String, String>) -> HGR {
+    pub fn new(market: Market) -> HGR {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -44,14 +45,11 @@ impl HGR {
             vars.kucoin_leverage,
         );
 
-        let bluefin_market = market_map
-            .get("bluefin")
-            .expect("Bluefin key not found")
-            .to_owned();
+        let bluefin_market = market.symbols.bluefin.to_owned();
         let bluefin_position = bluefin_client.get_user_position(&bluefin_market);
 
         HGR {
-            market_map,
+            market,
             bluefin_client,
             kucoin_client,
             bluefin_position,
@@ -71,10 +69,7 @@ impl Hedger for HGR {
         let (tx_bluefin_pos_change, rx_bluefin_pos_change) = mpsc::channel();
 
         let bluefin_market = self
-            .market_map
-            .get("bluefin")
-            .expect("Bluefin key not found")
-            .to_owned();
+            .market.symbols.bluefin.to_owned();
         let bluefin_market_for_order_fill = bluefin_market.clone();
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
@@ -119,11 +114,7 @@ impl Hedger for HGR {
         }
     }
     fn hedge_pos(&mut self) {
-        let bluefin_market = self
-            .market_map
-            .get("bluefin")
-            .expect("Bluefin key not found")
-            .to_owned();
+        let bluefin_market = self.market.symbols.bluefin.to_owned();
 
         // the call now returns Option(UserPosition)
         let kucoin_position = self.kucoin_client.get_position(&bluefin_market);
@@ -137,7 +128,7 @@ impl Hedger for HGR {
         // unwrap kucoin position and get quantity
         let kucoin_quantity = kucoin_position.unwrap().quantity;
 
-        let current_kucoin_qty: f64 = (kucoin_quantity).div(100.0); // this is only valid for ETH parameterize it through config
+        let current_kucoin_qty: f64 = (kucoin_quantity).div(self.market.lot_size); // this is only valid for ETH parameterize it through config
         info!("kucoin quantity:{}", current_kucoin_qty);
 
         let target_quantity = current_kucoin_qty * -1.0;

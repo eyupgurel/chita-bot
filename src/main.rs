@@ -16,7 +16,7 @@ use crate::market_maker::mm::{MarketMaker, MM};
 
 use env::EnvVars;
 use crate::hedge::hedger::{Hedger, HGR};
-use crate::models::common::Markets;
+use crate::models::common::Config;
 
 
 fn main() {
@@ -35,24 +35,24 @@ fn main() {
     env::init_logger(vars.log_level);
 
 
-    let markets_config = fs::read_to_string("src/config/markets.json")
-        .expect("Unable to read markets.json");
-    let markets: Markets = serde_json::from_str(&markets_config)
+    let config_str = fs::read_to_string("src/config/config.json")
+        .expect("Unable to read config.json");
+    let config: Config = serde_json::from_str(&config_str)
         .expect("JSON was not well-formatted");
 
     // Create and collect thread handles using an iterator
-    let mm_handles: Vec<JoinHandle<()>> = markets.markets.clone().into_iter()
-        .map(|(_currency, market_map)| {
+    let mm_handles: Vec<JoinHandle<()>> = config.markets.clone().into_iter()
+        .map(|market| {
             thread::spawn(move || {
-                MM::new(market_map).connect();
+                MM::new(market).connect();
             })
         })
         .collect();
 
-    let hgr_handles: Vec<JoinHandle<()>> = markets.markets.clone().into_iter()
-        .map(|(_currency, market_map)| {
+    let hgr_handles: Vec<JoinHandle<()>> = config.markets.clone().into_iter()
+        .map(|market| {
             thread::spawn(move || {
-                HGR::new(market_map).connect();
+                HGR::new(market).connect();
             })
         })
         .collect();
