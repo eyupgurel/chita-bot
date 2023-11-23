@@ -3,6 +3,7 @@
     {
       "name": "eth",
       "mm_lot_upper_bound": 100,
+      "lot_size": 100.0,
       "symbols": {
         "binance": "ethusdt",
         "kucoin": "ETHUSDTM",
@@ -11,7 +12,8 @@
     },
     {
       "name": "btc",
-      "mm_lot_upper_bound": 100,
+      "mm_lot_upper_bound": 10,
+      "lot_size": 1000.0,
       "symbols": {
         "binance": "btcusdt",
         "kucoin": "XBTUSDTM",

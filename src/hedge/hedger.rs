@@ -128,7 +128,7 @@ impl Hedger for HGR {
         // unwrap kucoin position and get quantity
         let kucoin_quantity = kucoin_position.unwrap().quantity;
 
-        let current_kucoin_qty: f64 = (kucoin_quantity).div(100.0); // this is only valid for ETH parameterize it through config
+        let current_kucoin_qty: f64 = (kucoin_quantity).div(self.market.lot_size); // this is only valid for ETH parameterize it through config
         info!("kucoin quantity:{}", current_kucoin_qty);
 
         let target_quantity = current_kucoin_qty * -1.0;
