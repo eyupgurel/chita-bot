@@ -18,3 +18,4 @@
 - 300003: Insufficient Balance
 - 300012: Market bound exceeded
 - 100004: Order can not be cancelled as its executed or does not exist
+- 429000: Rate limit, too many requests
