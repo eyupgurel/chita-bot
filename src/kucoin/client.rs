@@ -150,8 +150,6 @@ pub mod client {
 
             let value: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
 
-            println!("Response: {:#?}", res);
-
             if value["code"].to_string().eq("\"200000\"") {
                 let user_position: UserPosition =
                     serde_json::from_value(value["data"].clone()).unwrap();
