@@ -19,3 +19,4 @@ src/.DS_Store
 .env
 /src/config/config.json
 logs
+logs/chita-bot.log
