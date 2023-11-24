@@ -1,0 +1,12 @@
+[Unit]
+Description="Chita Bot"
+
+[Service]
+WorkingDirectory=/home/ubuntu/chita-bot/
+EnvironmentFile=/home/ubuntu/chita-bot/.env
+ExecStart=/home/ubuntu/chita-bot/target/debug/chita-bot
+Restart="on-failure"
+RestartSec="5s"
+
+[Install]
+WantedBy="multi-user.target" 
