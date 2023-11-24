@@ -1,6 +1,6 @@
 use dotenv::dotenv;
-use env_logger::{Builder, WriteStyle};
 use log::LevelFilter;
+use log4rs;
 
 // env variable struct
 pub struct EnvVars {
@@ -17,11 +17,11 @@ pub struct EnvVars {
     pub kucoin_api_phrase: String,
     pub kucoin_leverage: u128,
     pub kucoin_depth_topic: String,
-    pub kucoin_ticker_v2_socket_topic:String,
-    pub binance_websocket_url:String,
+    pub kucoin_ticker_v2_socket_topic: String,
+    pub binance_websocket_url: String,
     pub dry_run: bool,
-    pub market_making_trigger_bps:f64,
-    pub market_making_time_throttle_period:u64,
+    pub market_making_trigger_bps: f64,
+    pub market_making_time_throttle_period: u64,
     pub log_level: String,
 }
 
@@ -64,15 +64,18 @@ pub fn env_variables() -> EnvVars {
         .parse::<u128>()
         .unwrap();
 
-    let kucoin_depth_topic =  std::env::var("KUCOIN_DEPTH_SOCKET_TOPIC").expect("KUCOIN_DEPTH_SOCKET_TOPIC must be set.");
+    let kucoin_depth_topic =
+        std::env::var("KUCOIN_DEPTH_SOCKET_TOPIC").expect("KUCOIN_DEPTH_SOCKET_TOPIC must be set.");
 
-    let kucoin_ticker_v2_socket_topic =  std::env::var("KUCOIN_TICKER_V2_SOCKET_TOPIC").expect("KUCOIN_TICKER_V2_SOCKET_TOPIC must be set.");
+    let kucoin_ticker_v2_socket_topic = std::env::var("KUCOIN_TICKER_V2_SOCKET_TOPIC")
+        .expect("KUCOIN_TICKER_V2_SOCKET_TOPIC must be set.");
 
     let binance_websocket_url =
         std::env::var("BINANCE_WEB_SOCKET_URL").expect("BINANCE_WEB_SOCKET_URL must be set.");
 
-
-    let dry_run = std::env::var("DRY_RUN").expect("DRY_RUN must be set.").parse::<bool>()
+    let dry_run = std::env::var("DRY_RUN")
+        .expect("DRY_RUN must be set.")
+        .parse::<bool>()
         .unwrap();
 
     let market_making_trigger_bps = std::env::var("MARKET_MAKING_TRIGGER_BPS")
@@ -80,12 +83,10 @@ pub fn env_variables() -> EnvVars {
         .parse::<f64>()
         .unwrap();
 
-
     let market_making_time_throttle_period = std::env::var("MARKET_MAKING_TIME_THROTTLE_PERIOD")
         .expect("MARKET_MAKING_TIME_THROTTLE_PERIOD be set.")
         .parse::<u64>()
         .unwrap();
-
 
     // misc
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
@@ -118,7 +119,7 @@ pub fn env_variables() -> EnvVars {
  */
 #[allow(dead_code)]
 pub fn init_logger(log_level: String) {
-    let mut builder: Builder = Builder::new();
+    log4rs::init_file("./logging_config.yaml", Default::default()).unwrap();
 
     let filter: LevelFilter = match log_level.as_str() {
         "Error" => LevelFilter::Error,
@@ -129,8 +130,5 @@ pub fn init_logger(log_level: String) {
         "Info" | _ => LevelFilter::Info,
     };
 
-    builder
-        .filter(None, filter)
-        .write_style(WriteStyle::Always)
-        .init();
+    log::set_max_level(filter);
 }
