@@ -61,6 +61,7 @@ pub mod client {
             websocket_url: &str,
             leverage: u128,
         ) -> KuCoinClient {
+            // TODO read from config and pass as variable when creating kucoin client
             let mut markets: HashMap<String, String> = HashMap::new();
             markets.insert("ETH-PERP".to_string(), "ETHUSDTM".to_string());
             markets.insert("BTC-PERP".to_string(), "XBTUSDTM".to_string());

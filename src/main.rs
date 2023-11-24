@@ -1,23 +1,21 @@
-use std::{fs, panic, process, thread};
 use std::thread::JoinHandle;
+use std::{fs, panic, process, thread};
 
 mod bluefin;
 mod env;
+mod hedge;
 mod kucoin;
 mod market_maker;
 mod models;
 mod sockets;
 mod tests;
 mod utils;
-mod hedge;
-mod config;
 
 use crate::market_maker::mm::{MarketMaker, MM};
 
-use env::EnvVars;
 use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Config;
-
+use env::EnvVars;
 
 fn main() {
     // Set a custom global panic hook
@@ -29,19 +27,19 @@ fn main() {
         process::exit(1);
     }));
 
-
     // get env variables
     let vars: EnvVars = env::env_variables();
     env::init_logger(vars.log_level);
 
-
-    let config_str = fs::read_to_string("src/config/config.json")
-        .expect("Unable to read config.json");
-    let config: Config = serde_json::from_str(&config_str)
-        .expect("JSON was not well-formatted");
+    let config_str =
+        fs::read_to_string("src/config/config.json").expect("Unable to read config.json");
+    let config: Config = serde_json::from_str(&config_str).expect("JSON was not well-formatted");
 
     // Create and collect thread handles using an iterator
-    let mm_handles: Vec<JoinHandle<()>> = config.markets.clone().into_iter()
+    let mm_handles: Vec<JoinHandle<()>> = config
+        .markets
+        .clone()
+        .into_iter()
         .map(|market| {
             thread::spawn(move || {
                 MM::new(market).connect();
@@ -49,14 +47,16 @@ fn main() {
         })
         .collect();
 
-    let hgr_handles: Vec<JoinHandle<()>> = config.markets.clone().into_iter()
+    let hgr_handles: Vec<JoinHandle<()>> = config
+        .markets
+        .clone()
+        .into_iter()
         .map(|market| {
             thread::spawn(move || {
                 HGR::new(market).connect();
             })
         })
         .collect();
-
 
     let mut combined_handles = mm_handles;
     combined_handles.extend(hgr_handles);
