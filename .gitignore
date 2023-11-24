@@ -18,3 +18,4 @@ src/.DS_Store
 .vscode
 .env
 /src/config/config.json
+logs.log
