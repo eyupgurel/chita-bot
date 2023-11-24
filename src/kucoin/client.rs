@@ -202,9 +202,8 @@ pub mod client {
             let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                eprintln!("Futures order placed successfully: {}", response_body);
+                info!("Futures order placed successfully: {}", response_body);
                 let order_id = unescape(value["data"]["orderId"].as_str().unwrap()).unwrap();
-                info!("order_id {}", order_id);
                 return CallResponse {
                     error: None,
                     order_id: Some(order_id),

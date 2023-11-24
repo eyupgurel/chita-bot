@@ -16,12 +16,13 @@ use crate::market_maker::mm::{MarketMaker, MM};
 use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Config;
 use env::EnvVars;
+use log::error;
 
 fn main() {
     // Set a custom global panic hook
     panic::set_hook(Box::new(|info| {
         // Log the panic information
-        eprintln!("Panic occurred: {:?}", info);
+        error!("Panic occurred: {:?}", info);
 
         // Exit with a non-zero status code to indicate error
         process::exit(1);
