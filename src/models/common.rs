@@ -86,6 +86,12 @@ pub fn divide(dividend: &[f64], divisor: f64) -> Vec<f64> {
         .collect()
 }
 
+pub fn multiply(multiplicand: &[f64], multiplier: f64) -> Vec<f64> {
+    multiplicand.iter()
+        .map(|&multiplicand_item| multiplicand_item * multiplier)
+        .collect()
+}
+
 pub fn deserialize_optional_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
     where
         D: Deserializer<'de>,
