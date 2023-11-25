@@ -11,6 +11,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
+use rust_decimal::prelude::ToPrimitive;
 use crate::bluefin::{BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
@@ -320,7 +321,7 @@ impl MarketMaker for MM {
         if let (Some(&price), Some(&size)) = (prices.first(), sizes.first()) {
             // Ensure the size is positive and non-zero
             if size.is_sign_positive() && size > 0.0 {
-                let lot_size = (size * self.market.lot_size).floor() as u128;
+                let lot_size = (size * self.market.lot_size.to_f64().unwrap()).floor() as u128;
                 let order_size = if lot_size > self.market.mm_lot_upper_bound {self.market.mm_lot_upper_bound} else {lot_size};
                 Some((price, order_size))
             } else {

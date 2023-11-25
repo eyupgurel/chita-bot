@@ -46,7 +46,7 @@ pub struct UserPosition {
     pub avg_entry_price: f64,
 
     #[serde(rename = "currentQty")]
-    pub quantity: f64,
+    pub quantity: i128,
     // pub margin: u128,
     #[serde(rename = "realLeverage")]
     pub leverage: f64,

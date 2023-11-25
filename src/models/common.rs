@@ -18,7 +18,8 @@ pub struct Symbol {
 pub struct Market {
     pub name: String,
     pub mm_lot_upper_bound: u128,
-    pub lot_size:f64,
+    pub lot_size:u128,
+    pub min_size:String,
     pub symbols: Symbol,
 }
 
