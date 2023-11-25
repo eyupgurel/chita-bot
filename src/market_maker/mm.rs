@@ -11,7 +11,8 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
-use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use crate::bluefin::{BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
@@ -321,9 +322,10 @@ impl MarketMaker for MM {
         if let (Some(&price), Some(&size)) = (prices.first(), sizes.first()) {
             // Ensure the size is positive and non-zero
             if size.is_sign_positive() && size > 0.0 {
-                let lot_size = (size * self.market.lot_size.to_f64().unwrap()).floor() as u128;
-                let order_size = if lot_size > self.market.mm_lot_upper_bound {self.market.mm_lot_upper_bound} else {lot_size};
-                Some((price, order_size))
+                let lot_size = (Decimal::from_f64(size).unwrap() * Decimal::from_u128(self.market.lot_size).unwrap()).floor();
+                let upper_bound = Decimal::from_u128(self.market.mm_lot_upper_bound).unwrap();
+                let order_size = if lot_size > upper_bound {upper_bound} else {lot_size};
+                Some((price, Decimal::to_u128(&order_size).unwrap()))
             } else {
                 None
             }
@@ -354,12 +356,23 @@ impl MarketMaker for MM {
 
             if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
                 debug!("top ask to be posted as limit on Kucoin:{:?}",top_ask);
-                let ask_order_response = self.kucoin_client.place_limit_order(&bluefin_market, false, round_to_precision(top_ask.0,2), top_ask.1);
+
+                let price = round_to_precision(top_ask.0,self.market.price_precision);
+                let quantity = top_ask.1;
+
+                debug!("price: {} quantity: {}", price, quantity);
+                let ask_order_response = self.kucoin_client.place_limit_order(&bluefin_market, false, price, quantity);
                 self.kucoin_ask_order_response = ask_order_response;
             }
             if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
                 debug!("top bid to be posted as limit on Kucoin:{:?}",top_bid);
-                let bid_order_response = self.kucoin_client.place_limit_order(&bluefin_market, true, round_to_precision(top_bid.0,2), top_bid.1);
+
+                let price = round_to_precision(top_bid.0,self.market.price_precision);
+                let quantity = top_bid.1;
+
+                debug!("price: {} quantity: {}", price, quantity);
+
+                let bid_order_response = self.kucoin_client.place_limit_order(&bluefin_market, true, price, quantity);
                 self.kucoin_bid_order_response = bid_order_response;
             }
         }
