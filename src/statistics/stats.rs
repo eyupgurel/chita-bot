@@ -45,12 +45,12 @@ impl Statistics for Stats {
     fn emit(&self) {
         loop{
             let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("could not get current time since unix epoch").as_millis();
-            let since = now - 1000 * 60 * 60 * 24 * 3;
+            let since = now - 60 * 60 * 1000;
 
             let bluefin_market = self.market.symbols.bluefin.to_owned();
             let total_buy_size = self.kucoin_client.get_fill_size_for_time_window(&bluefin_market, "buy", since);
             let total_sell_size = self.kucoin_client.get_fill_size_for_time_window(&bluefin_market, "sell", since);
-            let buy_percent = (total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0;
+            let buy_percent = if total_buy_size + total_sell_size == 0 {50.0} else  {(total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0};
             info!("buy percent:{}", buy_percent);
             self.tx_stats.send(buy_percent).expect("Error in sending stats");
 

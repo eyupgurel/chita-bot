@@ -82,8 +82,11 @@ pub trait MarketMaker {
         ref_book: &OrderBook,
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
+        buy_percent: f64,
         shift: f64,
     );
+
+    fn calculate_skew_multiplier(percent:f64) -> f64;
     fn create_mm_pair(
         &self,
         ref_book: &OrderBook,
@@ -171,7 +174,7 @@ impl MarketMaker for MM {
         });
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
-        let mut _stat:f64;
+        let mut buy_percent:f64 = 50.0;
         loop {
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
@@ -193,7 +196,7 @@ impl MarketMaker for MM {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, tkr_ob, -0.1);
+                        self.market_make(ref_ob, mm_ob, tkr_ob, buy_percent, 0.0);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -223,7 +226,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(&value, mm_ob, tkr_ob, -0.1);
+                        self.market_make(&value, mm_ob, tkr_ob, buy_percent,0.0);
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -254,7 +257,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, &value, -0.1);
+                        self.market_make(ref_ob, mm_ob, &value, buy_percent,0.0);
                     }
                     ob_map.insert("bluefin".to_string(), value);
                 }
@@ -267,9 +270,9 @@ impl MarketMaker for MM {
             }
 
             match self.rx_stats.try_recv(){
-                Ok(buy_percent) => {
-                    debug!("buy percent: {:?}", buy_percent);
-                   _stat = buy_percent;
+                Ok(percent) => {
+                    error!("buy percent: {:?}", percent);
+                   buy_percent = percent;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -282,10 +285,15 @@ impl MarketMaker for MM {
         }
     }
 
-    fn market_make(&mut self, ref_book: &OrderBook, mm_book: &OrderBook, tkr_book: &OrderBook, shift: f64) {
+    fn market_make(&mut self, ref_book: &OrderBook, mm_book: &OrderBook, tkr_book: &OrderBook, buy_percent:f64, shift: f64) {
         let vars: EnvVars = env::env_variables();
         if self.last_mm_instant.elapsed() >= Duration::from_millis(vars.market_making_time_throttle_period) {
-            let mm = self.create_mm_pair(ref_book, mm_book, tkr_book, 1.0,1.0, shift);
+
+            let sell_percent = 100.0 - buy_percent;
+            let bid_skew_scale = if sell_percent < 50.0 {MM::calculate_skew_multiplier(sell_percent)} else {1.0};
+            let ask_skew_scale = if buy_percent < 50.0 {MM::calculate_skew_multiplier(buy_percent)} else {1.0};
+
+            let mm = self.create_mm_pair(ref_book, mm_book, tkr_book, bid_skew_scale,ask_skew_scale, shift);
 
             debug!("ref ob: {:?}", &ref_book);
             debug!("mm ob: {:?}", &mm_book);
@@ -295,6 +303,10 @@ impl MarketMaker for MM {
             self.place_maker_orders(&mm);
             self.last_mm_instant = Instant::now();
         }
+    }
+
+    fn calculate_skew_multiplier(percent: f64) -> f64 {
+        1.0 + (50.0 - percent) / 50.0 //linearized skew formula
     }
 
     fn create_mm_pair(
