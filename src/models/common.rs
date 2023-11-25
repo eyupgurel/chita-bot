@@ -20,6 +20,7 @@ pub struct Market {
     pub mm_lot_upper_bound: u128,
     pub lot_size:u128,
     pub min_size:String,
+    pub price_precision: i32,
     pub symbols: Symbol,
 }
 
