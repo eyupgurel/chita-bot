@@ -1,3 +1,4 @@
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use log::info;
@@ -9,10 +10,11 @@ use crate::models::common::Market;
 pub struct Stats{
     market: Market,
     kucoin_client: KuCoinClient,
+    tx_stats: Sender<f64>,
 }
 
 impl Stats {
-    pub fn new(market: Market) -> Stats{
+    pub fn new(market: Market, tx_stats:Sender<f64>) -> Stats{
         let vars: EnvVars = env::env_variables();
         let kucoin_client = KuCoinClient::new(
             Credentials::new(
@@ -28,7 +30,8 @@ impl Stats {
 
         Stats {
             market,
-            kucoin_client
+            kucoin_client,
+            tx_stats
         }
     }
 
@@ -49,6 +52,7 @@ impl Statistics for Stats {
             let total_sell_size = self.kucoin_client.get_fill_size_for_time_window(&bluefin_market, "sell", since);
             let buy_percent = (total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0;
             info!("buy percent:{}", buy_percent);
+            self.tx_stats.send(buy_percent).expect("Error in sending stats");
 
             thread::sleep(Duration::from_secs(60));
         }

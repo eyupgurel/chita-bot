@@ -39,16 +39,26 @@ fn main() {
     let config: Config = serde_json::from_str(&config_str).expect("JSON was not well-formatted");
 
     // Create and collect thread handles using an iterator
-    let mm_handles: Vec<JoinHandle<()>> = config
+    let (mm_handles, statistic_handles): (Vec<JoinHandle<()>>, Vec<JoinHandle<()>>) = config
         .markets
         .clone()
         .into_iter()
         .map(|market| {
-            thread::spawn(move || {
-                MM::new(market).connect();
-            })
+            let (mut mm, tx_stats) = MM::new(market.clone()); // get MM instance and tx_stats
+
+            // Spawn one thread for MM
+            let mm_handle = thread::spawn(move || {
+                mm.connect();
+            });
+
+            // Spawn another thread for Stats, passing tx_stats
+            let stats_handle = thread::spawn(move || {
+                Stats::new(market, tx_stats).emit();
+            });
+
+            (mm_handle, stats_handle)
         })
-        .collect();
+        .unzip();
 
     let hgr_handles: Vec<JoinHandle<()>> = config
         .markets
@@ -57,17 +67,6 @@ fn main() {
         .map(|market| {
             thread::spawn(move || {
                 HGR::new(market).connect();
-            })
-        })
-        .collect();
-
-    let statistic_handles: Vec<JoinHandle<()>> = config
-        .markets
-        .clone()
-        .into_iter()
-        .map(|market| {
-            thread::spawn(move || {
-                Stats::new(market).emit();
             })
         })
         .collect();
