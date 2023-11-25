@@ -10,12 +10,14 @@ mod models;
 mod sockets;
 mod tests;
 mod utils;
+mod statistics;
 
 use crate::market_maker::mm::{MarketMaker, MM};
 
 use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Config;
 use env::EnvVars;
+use crate::statistics::stats::{Statistics, Stats};
 
 fn main() {
     // Set a custom global panic hook
@@ -58,8 +60,20 @@ fn main() {
         })
         .collect();
 
+    let statistic_handles: Vec<JoinHandle<()>> = config
+        .markets
+        .clone()
+        .into_iter()
+        .map(|market| {
+            thread::spawn(move || {
+                Stats::new(market).emit();
+            })
+        })
+        .collect();
+
     let mut combined_handles = mm_handles;
     combined_handles.extend(hgr_handles);
+    combined_handles.extend(statistic_handles);
 
     // Wait for all threads to complete in one pass
     combined_handles.into_iter().for_each(|handle| {
