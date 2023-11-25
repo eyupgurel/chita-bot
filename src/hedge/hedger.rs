@@ -5,13 +5,16 @@ use crate::kucoin::{Credentials, KuCoinClient};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use log::{debug, info};
 use serde_json::Value;
-use std::ops::Div;
+use std::str::FromStr;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use crate::models::common::Market;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 
-static BIGNUMBER_BASE: f64 = 1000000000000000000.0;
+
+static BIGNUMBER_BASE: u128 = 1000000000000000000;
 static HEDGE_PERIOD_DURATION: u64 = 1;
 
 pub struct HGR {
@@ -126,57 +129,55 @@ impl Hedger for HGR {
         }
 
         // unwrap kucoin position and get quantity
-        let kucoin_quantity = kucoin_position.unwrap().quantity;
+        let kucoin_quantity = Decimal::from(kucoin_position.unwrap().quantity);
 
-        let current_kucoin_qty: f64 = (kucoin_quantity).div(self.market.lot_size);
+        let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
         info!("kucoin quantity:{}", current_kucoin_qty);
 
-        let target_quantity = current_kucoin_qty * -1.0;
-        let mut bluefin_quantity = (self.bluefin_position.quantity as f64).div(BIGNUMBER_BASE);
+
+        let target_quantity = current_kucoin_qty * Decimal::from(-1);
+
+        let mut bluefin_quantity = Decimal::from_u128(self.bluefin_position.quantity).unwrap() / Decimal::from(BIGNUMBER_BASE);
+
 
         if !self.bluefin_position.side {
-            bluefin_quantity = bluefin_quantity * -1.0;
+            bluefin_quantity = bluefin_quantity * Decimal::from(-1);
         }
         info!("bluefin quantity:{}", bluefin_quantity);
         let diff = target_quantity - bluefin_quantity;
 
         let order_quantity = diff.abs();
 
-        let big_target = (order_quantity * BIGNUMBER_BASE) as u128;
-
-        let modulus = big_target % 100;
-
-        let trunk = big_target - modulus;
-
-        let rounded_order_quantity = (trunk as f64).div(BIGNUMBER_BASE);
-
         let is_buy = diff.is_sign_positive();
 
-        let rv = (rounded_order_quantity * 100.0).round() / 100.0;
-        info!("Order quantity:{} is buy:{}", rv, is_buy);
+        info!("Order quantity: {} is buy:{}", order_quantity, is_buy);
 
-        if rv >= 0.01
-        /* Min quantity for ETH (will need to take this value from config for BTC this will not work! */
-        {
-            let order =
-                self.bluefin_client
-                    .create_market_order(&bluefin_market, is_buy, false, rv, None);
-            info!("Order: {:#?}", order);
-            let signature = self.bluefin_client.sign_order(order.clone());
-            let status = self
-                .bluefin_client
-                .post_signed_order(order.clone(), signature);
-            info!("{:?}", status);
+        if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() {
+            {
+                info!("order quantity as decimal: {}", order_quantity);
+                let order_quantity_f64 = order_quantity.to_f64().unwrap();
+                info!("order quantity as f64: {}", order_quantity_f64);
+                let order =
+                    self.bluefin_client
+                        .create_market_order(&bluefin_market, is_buy, false, order_quantity_f64, None);
+                info!("Order: {:#?}", order);
+                let signature = self.bluefin_client.sign_order(order.clone());
+                let status = self
+                    .bluefin_client
+                    .post_signed_order(order.clone(), signature);
+                info!("{:?}", status);
 
-            // Optimistic approach to prevent oscillations. For now update local position as if the position if filled immediately.
-            let bf_pos_sign: i128 = if self.bluefin_position.side { 1 } else { -1 };
-            let bf_signed_pos: i128 = (self.bluefin_position.quantity as i128) * bf_pos_sign;
-            let order_pos_sign: i128 = if order.isBuy { 1 } else { -1 };
-            let order_signed_pos: i128 = (order.quantity as i128) * order_pos_sign;
-            let new_pos = bf_signed_pos + order_signed_pos;
+                // Optimistic approach to prevent oscillations. For now update local position as if the position if filled immediately.
+                let bf_pos_sign: i128 = if self.bluefin_position.side { 1 } else { -1 };
+                let bf_signed_pos: i128 = (self.bluefin_position.quantity as i128) * bf_pos_sign;
+                let order_pos_sign: i128 = if order.isBuy { 1 } else { -1 };
+                let order_signed_pos: i128 = (order.quantity as i128) * order_pos_sign;
+                let new_pos = bf_signed_pos + order_signed_pos;
 
-            self.bluefin_position.quantity = new_pos.abs() as u128;
-            self.bluefin_position.side = if new_pos > 0 { true } else { false };
+                self.bluefin_position.quantity = new_pos.abs() as u128;
+                self.bluefin_position.side = if new_pos > 0 { true } else { false };
+            }
         }
+
     }
 }

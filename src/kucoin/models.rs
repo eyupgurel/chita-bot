@@ -46,7 +46,7 @@ pub struct UserPosition {
     pub avg_entry_price: f64,
 
     #[serde(rename = "currentQty")]
-    pub quantity: f64,
+    pub quantity: i128,
     // pub margin: u128,
     #[serde(rename = "realLeverage")]
     pub leverage: f64,
@@ -159,6 +159,56 @@ pub struct PositionChangeData {
     pub settle_currency: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentFillsResponse {
+    pub code: String,
+    pub data: Vec<Trade>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FillsResponse {
+    pub code: String,
+    pub data: FillsData,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FillsData {
+    pub current_page: i32,
+    pub page_size: i32,
+    pub total_num: i64,
+    pub total_page: i64,
+    pub items: Vec<Trade>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Trade {
+    pub symbol: String,
+    pub trade_id: String,
+    pub order_id: String,
+    pub side: String,
+    pub liquidity: String,
+    pub force_taker: bool,
+    pub price: String,
+    pub size: i32,
+    #[serde(deserialize_with = "deserialize_string_to_f64")]
+    pub value: f64,
+    pub fee_rate: String,
+    pub fix_fee: String,
+    pub fee_currency: String,
+    pub stop: Option<String>,
+    pub fee: String,
+    pub order_type: String,
+    pub trade_type: String,
+    pub created_at: u64,
+    pub settle_currency: String,
+    pub open_fee_pay: Option<String>,
+    pub close_fee_pay: Option<String>,
+    pub trade_time: u64,
+}
 #[cfg(test)]
 mod tests {
     use crate::kucoin::models::PositionChangeMessage;

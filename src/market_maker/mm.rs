@@ -8,8 +8,10 @@ use crate::sockets::kucoin_ob_socket::{stream_kucoin_socket};
 use log::{debug, error, info};
 use std::collections::HashMap;
 use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
+use rust_decimal::prelude::ToPrimitive;
 use crate::bluefin::{BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
@@ -28,10 +30,11 @@ pub struct MM {
     kucoin_ask_order_response: CallResponse,
     kucoin_bid_order_response: CallResponse,
     last_mm_instant: Instant,
+    rx_stats: Receiver<f64>,
 }
 
 impl MM {
-    pub fn new(market: Market) -> MM {
+    pub fn new(market: Market) -> (MM, Sender<f64>) {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -57,14 +60,17 @@ impl MM {
         let bluefin_market = market.symbols.bluefin.to_owned();
         kucoin_client.cancel_all_orders(Some(&bluefin_market));
 
-        MM {
+        let (tx_stats, rx_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
+
+        (MM {
             market,
             bluefin_client,
             kucoin_client,
             kucoin_ask_order_response: CallResponse { error: None, order_id: None },
             kucoin_bid_order_response: CallResponse { error: None, order_id: None },
             last_mm_instant: Instant::now(),
-        }
+            rx_stats
+        }, tx_stats)
     }
 }
 
@@ -96,6 +102,7 @@ pub trait MarketMaker {
     fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)));
 
     fn debug_ob_map(&self, ob_map: &HashMap<String, OrderBook>);
+
 }
 
 impl MarketMaker for MM {
@@ -108,6 +115,7 @@ impl MarketMaker for MM {
         let (tx_binance_ob_diff, rx_binance_ob_diff) = mpsc::channel();
         let (tx_bluefin_ob, rx_bluefin_ob) = mpsc::channel();
         let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
+
 
         let kucoin_market = self.market.symbols.kucoin.to_owned();
         let kucoin_market_for_ob = kucoin_market.clone();
@@ -160,7 +168,7 @@ impl MarketMaker for MM {
         });
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
-
+        let mut _stat:f64;
         loop {
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
@@ -254,6 +262,19 @@ impl MarketMaker for MM {
                     panic!("Bluefin worker has disconnected!");
                 }
             }
+
+            match self.rx_stats.try_recv(){
+                Ok(buy_percent) => {
+                    debug!("buy percent: {:?}", buy_percent);
+                   _stat = buy_percent;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from kucoin yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    panic!("statistic worker has disconnected!");
+                }
+            }
             self.debug_ob_map(&ob_map);
         }
     }
@@ -300,7 +321,7 @@ impl MarketMaker for MM {
         if let (Some(&price), Some(&size)) = (prices.first(), sizes.first()) {
             // Ensure the size is positive and non-zero
             if size.is_sign_positive() && size > 0.0 {
-                let lot_size = (size * self.market.lot_size).floor() as u128;
+                let lot_size = (size * self.market.lot_size.to_f64().unwrap()).floor() as u128;
                 let order_size = if lot_size > self.market.mm_lot_upper_bound {self.market.mm_lot_upper_bound} else {lot_size};
                 Some((price, order_size))
             } else {
@@ -377,4 +398,5 @@ impl MarketMaker for MM {
             }
         }
     }
+
 }

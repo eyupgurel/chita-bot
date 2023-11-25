@@ -1,5 +1,6 @@
 use std::thread::JoinHandle;
 use std::{fs, panic, process, thread};
+use log::error;
 
 mod bluefin;
 mod env;
@@ -10,13 +11,14 @@ mod models;
 mod sockets;
 mod tests;
 mod utils;
+mod statistics;
 
 use crate::market_maker::mm::{MarketMaker, MM};
 
 use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Config;
 use env::EnvVars;
-use log::error;
+use crate::statistics::stats::{Statistics, Stats};
 
 fn main() {
     // Set a custom global panic hook
@@ -37,16 +39,26 @@ fn main() {
     let config: Config = serde_json::from_str(&config_str).expect("JSON was not well-formatted");
 
     // Create and collect thread handles using an iterator
-    let mm_handles: Vec<JoinHandle<()>> = config
+    let (mm_handles, statistic_handles): (Vec<JoinHandle<()>>, Vec<JoinHandle<()>>) = config
         .markets
         .clone()
         .into_iter()
         .map(|market| {
-            thread::spawn(move || {
-                MM::new(market).connect();
-            })
+            let (mut mm, tx_stats) = MM::new(market.clone()); // get MM instance and tx_stats
+
+            // Spawn one thread for MM
+            let mm_handle = thread::spawn(move || {
+                mm.connect();
+            });
+
+            // Spawn another thread for Stats, passing tx_stats
+            let stats_handle = thread::spawn(move || {
+                Stats::new(market, tx_stats).emit();
+            });
+
+            (mm_handle, stats_handle)
         })
-        .collect();
+        .unzip();
 
     let hgr_handles: Vec<JoinHandle<()>> = config
         .markets
@@ -61,6 +73,7 @@ fn main() {
 
     let mut combined_handles = mm_handles;
     combined_handles.extend(hgr_handles);
+    combined_handles.extend(statistic_handles);
 
     // Wait for all threads to complete in one pass
     combined_handles.into_iter().for_each(|handle| {
