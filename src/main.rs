@@ -12,6 +12,8 @@ mod statistics;
 mod tests;
 mod utils;
 
+mod circuit_breakers;
+
 use crate::market_maker::mm::{MarketMaker, MM};
 
 use crate::hedge::hedger::{Hedger, HGR};
@@ -46,7 +48,7 @@ fn main() {
         .clone()
         .into_iter()
         .map(|market| {
-            let (mut mm, tx_stats) = MM::new(market.clone()); // get MM instance and tx_stats
+            let (mut mm, tx_stats) = MM::new(market.clone(), config.circuit_breaker_config.clone()); // get MM instance and tx_stats
 
             // Spawn one thread for MM
             let mm_handle = thread::spawn(move || {
@@ -68,7 +70,7 @@ fn main() {
         .into_iter()
         .map(|market| {
             thread::spawn(move || {
-                HGR::new(market).connect();
+                HGR::new(market, config.circuit_breaker_config.clone()).connect();
             })
         })
         .collect();

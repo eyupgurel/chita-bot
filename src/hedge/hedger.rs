@@ -17,13 +17,14 @@ static HEDGE_PERIOD_DURATION: u64 = 1;
 
 pub struct HGR {
     pub market: Market,
+    pub cb_config: CircuitBreakerConfig,
     bluefin_client: BluefinClient,
     kucoin_client: KuCoinClient,
     bluefin_position: UserPosition,
 }
 
 impl HGR {
-    pub fn new(market: Market) -> HGR {
+    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> HGR {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -51,6 +52,7 @@ impl HGR {
 
         HGR {
             market,
+            cb_config,
             bluefin_client,
             kucoin_client,
             bluefin_position,
@@ -94,17 +96,32 @@ impl Hedger for HGR {
         });
         thread::sleep(Duration::from_secs(5));
         self.hedge();
+
+        let mut rx_bluefin_pos_change_breaker = CancelAllOrdersCircuitBreaker {
+            circuit_breaker: CircuitBreakerBase {
+                config: self.cb_config.clone(),
+                num_failures: 0,
+                state: State::Closed,
+                kucoin_breaker: KuCoinBreaker::new(),
+                market: bluefin_market.clone(),
+            }
+        };
+
         loop {
             match rx_bluefin_pos_change.try_recv() {
                 Ok(value) => {
                     tracing::debug!("position change: {:?}", value);
+                    rx_bluefin_pos_change_breaker.on_success();
                     //self.bluefin_position = value;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Bluefin worker has disconnected!");
+                    error!("Bluefin worker has disconnected!");
+                    if !rx_bluefin_pos_change_breaker.is_open() {
+                        rx_bluefin_pos_change_breaker.on_failure();
+                    }
                 }
             }
         }

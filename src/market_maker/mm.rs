@@ -26,6 +26,7 @@ use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
 
 pub struct MM {
+    pub cb_config: CircuitBreakerConfig,
     pub market: Market,
     #[allow(dead_code)]
     bluefin_client: BluefinClient,
@@ -37,7 +38,7 @@ pub struct MM {
 }
 
 impl MM {
-    pub fn new(market: Market) -> (MM, Sender<f64>) {
+    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> (MM, Sender<f64>) {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -67,6 +68,7 @@ impl MM {
 
         (
             MM {
+                cb_config,
                 market,
                 bluefin_client,
                 kucoin_client,
@@ -83,6 +85,18 @@ impl MM {
             },
             tx_stats,
         )
+    }
+
+    fn cancel_order_breaker(&mut self, bluefin_market: String) -> CancelAllOrdersCircuitBreaker {
+        CancelAllOrdersCircuitBreaker {
+            circuit_breaker: CircuitBreakerBase {
+                config: self.cb_config.clone(),
+                num_failures: 0,
+                state: State::Closed,
+                kucoin_breaker: KuCoinBreaker::new(),
+                market: bluefin_market.clone(),
+            }
+        }
     }
 }
 
@@ -190,23 +204,44 @@ impl MarketMaker for MM {
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
         let mut buy_percent: f64 = 50.0;
+
+        // ---- Circuit Breakers ---- //
+
+
+        let mut kucoin_ob_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
+        let mut kucoin_ticker_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
+
+        let mut binance_ob_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
+        let mut binance_ob_diff_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
+
+        let mut bluefin_ob_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
+        let mut bluefin_ob_diff_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
+
+
+        let mut rx_stats_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
+
         loop {
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
                     tracing::debug!("kucoin ob: {:?}", value);
+                    kucoin_ob_disconnect_breaker.on_success();
                     ob_map.insert(key.to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Kucoin worker has disconnected!");
+                    error!("Kucoin worker has disconnected!");
+                    if !kucoin_ob_disconnect_breaker.is_open() {
+                        kucoin_ob_disconnect_breaker.on_failure();
+                    }
                 }
             }
 
             match rx_kucoin_ticker.try_recv() {
                 Ok((key, value)) => {
                     tracing::debug!("kucoin ticker {}: {:?}", key, value);
+                    kucoin_ticker_disconnect_breaker.on_success();
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
@@ -218,26 +253,34 @@ impl MarketMaker for MM {
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Kucoin worker has disconnected!");
+                    error!("Kucoin worker has disconnected!");
+                    if !kucoin_ticker_disconnect_breaker.is_open() {
+                        kucoin_ticker_disconnect_breaker.on_failure();
+                    }
                 }
             }
 
             match rx_binance_ob.try_recv() {
                 Ok(value) => {
                     tracing::debug!("binance ob: {:?}", value);
+                    binance_ob_disconnect_breaker.on_success();
                     ob_map.insert("binance".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Binance worker has disconnected!");
+                    error!("Binance worker has disconnected!");
+                    if !binance_ob_disconnect_breaker.is_open() {
+                        binance_ob_disconnect_breaker.on_failure();
+                    }
                 }
             }
 
             match rx_binance_ob_diff.try_recv() {
                 Ok(value) => {
                     tracing::debug!("diff of binance ob: {:?}", value);
+                    binance_ob_diff_disconnect_breaker.on_success();
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
@@ -249,26 +292,35 @@ impl MarketMaker for MM {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Binance worker has disconnected!");
+                    error!("Binance worker has disconnected!");
+                    if !binance_ob_diff_disconnect_breaker.is_open() {
+                        binance_ob_diff_disconnect_breaker.on_failure();
+                    }
+
                 }
             }
 
             match rx_bluefin_ob.try_recv() {
                 Ok(value) => {
                     tracing::debug!("bluefin ob: {:?}", value);
+                    bluefin_ob_disconnect_breaker.on_success();
                     ob_map.insert("bluefin".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Bluefin worker has disconnected!");
+                    error!("Bluefin worker has disconnected!");
+                    if !bluefin_ob_disconnect_breaker.is_open() {
+                        bluefin_ob_disconnect_breaker.on_failure();
+                    }
                 }
             }
 
             match rx_bluefin_ob_diff.try_recv() {
                 Ok(value) => {
                     tracing::debug!("diff of bluefin ob: {:?}", value);
+                    bluefin_ob_diff_disconnect_breaker.on_success();
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
@@ -280,20 +332,27 @@ impl MarketMaker for MM {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Bluefin worker has disconnected!");
+                    error!("Bluefin worker has disconnected!");
+                    if !bluefin_ob_diff_disconnect_breaker.is_open() {
+                        bluefin_ob_diff_disconnect_breaker.on_failure();
+                    }
                 }
             }
 
             match self.rx_stats.try_recv() {
                 Ok(percent) => {
                     tracing::debug!("buy percent: {:?}", percent);
+                    rx_stats_disconnect_breaker.on_success();
                     buy_percent = percent;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("statistic worker has disconnected!");
+                    error!("statistic worker has disconnected!");
+                    if !rx_stats_disconnect_breaker.is_open() {
+                        rx_stats_disconnect_breaker.on_failure();
+                    }
                 }
             }
             self.debug_ob_map(&ob_map);
