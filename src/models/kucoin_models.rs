@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::models::common::OrderBook;
 use crate::models::common::deserialize_as_mix_tuples;
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceServer {

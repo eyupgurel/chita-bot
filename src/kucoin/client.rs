@@ -14,12 +14,12 @@ pub mod client {
     use sha2::Sha256;
     use snailquote::unescape;
     use std::collections::HashMap;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
 
-    use crate::kucoin::models::{Error, Method, Response};
+    use crate::kucoin::models::{Error, FillsResponse, Method, RecentFillsResponse, Response};
 
     #[derive(Debug, Clone)]
     pub struct Credentials {
@@ -127,6 +127,96 @@ pub mod client {
             return resp.data.token;
         }
 
+        pub fn get_recent_fills(&self, market: &str) -> RecentFillsResponse {
+            let endpoint = String::from("/api/v1/recentFills");
+
+            let market_symbol = self.markets.get(market).unwrap();
+
+            let mut params: HashMap<String, String> = HashMap::new();
+            params.insert(String::from("symbol"), market_symbol.clone());
+
+            let query = utils::format_query(&params);
+
+            let url: String = format!("{}{}{}", &self.api_gateway, endpoint, query);
+
+            let headers: HeaderMap =
+                self.sign_headers(endpoint.clone(), None, Some(query), Method::GET);
+
+            let res: String = self
+                .client
+                .get(url)
+                .headers(headers)
+                .send()
+                .unwrap()
+                .text()
+                .unwrap();
+
+            let resp: RecentFillsResponse = serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            return resp;
+        }
+
+        pub fn get_fills(&self, market: &str, side: Option<&str>, order_type: Option<&str>, start_at: Option<u128>, end_at: Option<u128>, current_page: Option<u64>, page_size: Option<u64>) -> FillsResponse {
+            let endpoint = String::from("/api/v1/fills");
+
+            let market_symbol = self.markets.get(market).unwrap();
+
+            let mut params: HashMap<String, String> = HashMap::new();
+
+            params.insert(String::from("symbol"), market_symbol.clone());
+
+            if let Some(s) = side {
+                params.insert(String::from("side"), String::from(s));
+            };
+
+            if let Some(s) = order_type {
+                params.insert(String::from("type"), String::from(s));
+            };
+
+            if let Some(u) = start_at {
+                params.insert(String::from("startAt"), u.to_string());
+            };
+
+            if let Some(u) = end_at {
+                params.insert(String::from("endAt"), u.to_string());
+            };
+
+            if let Some(u) = current_page {
+                params.insert(String::from("currenPage"), u.to_string());
+            };
+
+            if let Some(u) = page_size {
+                params.insert(String::from("pageSize"), u.to_string());
+            };
+
+
+            let query = utils::format_query(&params);
+
+            let url: String = format!("{}{}{}", &self.api_gateway, endpoint, query);
+
+            let headers: HeaderMap =
+                self.sign_headers(endpoint.clone(), None, Some(query), Method::GET);
+
+            let res: String = self
+                .client
+                .get(url)
+                .headers(headers)
+                .send()
+                .unwrap()
+                .text()
+                .unwrap();
+
+            let resp: FillsResponse = serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            return resp;
+        }
+
+        pub fn get_fill_size_for_time_window(&self, market: &str, side: &str, since: u128) -> i32 {
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("could not get current time since unix epoch").as_millis();
+            let fills = self.get_fills(market,Some(side), None,Some(since), Some(now), None, Some(1000));
+            let total_size = fills.data.items.iter().fold(0,|acc,trade| acc + trade.size);
+            total_size
+        }
         pub fn get_position(&self, market: &str) -> Option<UserPosition> {
             let endpoint = String::from("/api/v1/position");
             let market_symbol = self.markets.get(market).unwrap();
@@ -475,5 +565,60 @@ pub mod client {
             resp.error.is_none(),
             "Error cancelling all orders for all markets"
         );
+    }
+    #[test]
+    fn should_get_recent_fills() {
+        let credentials = Credentials::new("654bad2744b9f1000170a857", "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a", "6aabPMdj!!4Xt3Y&");
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        );
+
+        let resp = client.get_recent_fills("ETH-PERP");
+
+        assert_eq!(resp.code, "200000", "Error getting recent fills");
+    }
+
+    #[test]
+    fn should_get_fills() {
+        let credentials = Credentials::new("654bad2744b9f1000170a857", "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a", "6aabPMdj!!4Xt3Y&");
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        );
+
+        let resp = client.get_fills("ETH-PERP", None, None, Some(1700665497000), Some(1700838297000), None, None);
+
+        assert_eq!(resp.code, "200000", "Error getting recent fills");
+    }
+
+    #[test]
+    fn should_get_total_fill_size() {
+        let credentials = Credentials::new("654bad2744b9f1000170a857", "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a", "6aabPMdj!!4Xt3Y&");
+
+        let client = KuCoinClient::new(
+            credentials,
+            "https://api-futures.kucoin.com",
+            "https://api-futures.kucoin.com/api/v1/bullet-public",
+            "wss://ws-api-futures.kucoin.com/endpoint",
+            3,
+        );
+
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("could not get current time since unix epoch").as_millis();
+        let since = now - 1000 * 60 * 60 * 24;
+        let total_buy_size = client.get_fill_size_for_time_window("BTC-PERP", "buy", since);
+        let total_sell_size = client.get_fill_size_for_time_window("BTC-PERP", "sell", since);
+        let buy_percent = (total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0;
+
+        assert_eq!(total_buy_size, 1, "Error getting recent fills");
+        assert_eq!(total_sell_size, 5, "Error getting recent fills");
     }
 }
