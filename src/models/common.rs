@@ -21,6 +21,7 @@ pub struct Market {
     pub lot_size:u128,
     pub min_size:String,
     pub price_precision: i32,
+    pub skewing_coefficient:f64,
     pub symbols: Symbol,
 }
 

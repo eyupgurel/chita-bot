@@ -6,6 +6,7 @@
       "lot_size": 100,
       "min_size": "0.01",
       "price_precision": 2,
+      "skewing_coefficient": 1.0,
       "symbols": {
         "binance": "ethusdt",
         "kucoin": "ETHUSDTM",
@@ -18,6 +19,7 @@
       "lot_size": 1000,
       "min_size": "0.001",
       "price_precision": 1,
+      "skewing_coefficient": 1.0,
       "symbols": {
         "binance": "btcusdt",
         "kucoin": "XBTUSDTM",

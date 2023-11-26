@@ -86,7 +86,7 @@ pub trait MarketMaker {
         shift: f64,
     );
 
-    fn calculate_skew_multiplier(percent:f64) -> f64;
+    fn calculate_skew_multiplier(skewing_coefficient:f64, percent: f64) -> f64;
     fn create_mm_pair(
         &self,
         ref_book: &OrderBook,
@@ -290,8 +290,11 @@ impl MarketMaker for MM {
         if self.last_mm_instant.elapsed() >= Duration::from_millis(vars.market_making_time_throttle_period) {
 
             let sell_percent = 100.0 - buy_percent;
-            let bid_skew_scale = if sell_percent < 50.0 {MM::calculate_skew_multiplier(sell_percent)} else {1.0};
-            let ask_skew_scale = if buy_percent < 50.0 {MM::calculate_skew_multiplier(buy_percent)} else {1.0};
+            // bid making will be skewed if and only if sell_percent is less than 50% otherwise business as usual.
+            // Skewing is only for discouragement not encouragement.
+            let bid_skew_scale = if sell_percent < 50.0 {MM::calculate_skew_multiplier(self.market.skewing_coefficient, sell_percent)} else {1.0};
+            // same as bid skewing.
+            let ask_skew_scale = if buy_percent < 50.0 {MM::calculate_skew_multiplier(self.market.skewing_coefficient, buy_percent)} else {1.0};
 
             let mm = self.create_mm_pair(ref_book, mm_book, tkr_book, bid_skew_scale,ask_skew_scale, shift);
 
@@ -305,8 +308,38 @@ impl MarketMaker for MM {
         }
     }
 
-    fn calculate_skew_multiplier(percent: f64) -> f64 {
-        1.0 + (50.0 - percent) / 50.0 //linearized skew formula
+    /// Calculates the skewing multiplier in order to disincentivize one side of the order making.
+    /// This is needed to ensure long/short balancing.
+    ///
+    /// # Arguments
+    ///
+    /// * `skewing_coefficient` - Typically 1.0. May be bigger than 1.0 if market making is to be
+    /// seriously disincentivized but values less than 1.0 are not accepted.
+    /// * `percent` - Order fills percentage volume of the opposite side of the book.
+    /// It can be at most 50.0. Values bigger than 50.0 is not accepted since if so skewing will not
+    /// be needed.
+    ///
+    /// # Example
+    ///
+    /// let result = calculate_skew_multiplier(1.0, 50.0);
+    /// assert_eq!(result, 1.0); for 50 there will be no skewing.
+    ///
+    /// let result = calculate_skew_multiplier(1.0, 25.0);
+    /// assert_eq!(result, 1.5); for 25 there will be more skewing.
+    ///
+    /// let result = calculate_skew_multiplier(1.0, 0.0);
+    /// assert_eq!(result, 2); for 0.0 there will be max skewing.
+    ///
+    /// All values above are calculated for skewing_coefficient = 1.0. Bigger the value more
+    /// disincentivization comes to pass.
+    fn calculate_skew_multiplier(skewing_coefficient:f64, percent: f64) -> f64 {
+        if percent > 50.0 {
+            panic!("percent: {} is out of range. It must be in between 0 and 50", percent);
+        }
+        if skewing_coefficient < 1.0 {
+            panic!("skewing_coefficient: {} is out of range. It must be bigger than 1.0", skewing_coefficient);
+        }
+        skewing_coefficient * (1.0 + (50.0 - percent) / 50.0)
     }
 
     fn create_mm_pair(
