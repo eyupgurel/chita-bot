@@ -403,7 +403,7 @@ impl MarketMaker for MM {
     ) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)) {
         let ref_mid_price = ref_book.calculate_mid_prices();
         let mm_mid_price = mm_book.calculate_mid_prices();
-        let spread = subtract(&ref_mid_price, &mm_mid_price);
+        let spread = if ask_skew_scale > bid_skew_scale  {subtract(&mm_mid_price,&ref_mid_price)} else { subtract(&ref_mid_price,&mm_mid_price) };
         let half_spread = divide(&spread, 2.0);
         tracing::info!("half_spread: {:?}", half_spread);
 
