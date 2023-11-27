@@ -1,13 +1,11 @@
-use crate::models::kucoin_models::Response;
-use reqwest;
-use crate::models::kucoin_models::{Comm};
-use std::net::TcpStream;
-use log::error;
-use tungstenite::{WebSocket};
-use tungstenite::stream::MaybeTlsStream;
 use crate::env;
 use crate::env::EnvVars;
-
+use crate::models::kucoin_models::Comm;
+use crate::models::kucoin_models::Response;
+use reqwest;
+use std::net::TcpStream;
+use tungstenite::stream::MaybeTlsStream;
+use tungstenite::WebSocket;
 
 pub fn get_kucoin_url() -> String {
     let client = reqwest::blocking::Client::new();
@@ -25,7 +23,7 @@ pub fn get_kucoin_url() -> String {
     let _token = j
         .map(|response| response.data.token)
         .map_err(|e| {
-            error!("Error: {}", e);
+            tracing::error!("Error: {}", e);
             e
         })
         .unwrap();
@@ -47,7 +45,9 @@ pub fn send_ping(
             type_: "ping".to_string(),
         };
         kucoin_socket
-            .send(tungstenite::Message::Text(serde_json::to_string(&ping).unwrap()))
+            .send(tungstenite::Message::Text(
+                serde_json::to_string(&ping).unwrap(),
+            ))
             .expect("Failed to send ping");
         *last_ping_time = std::time::Instant::now();
     }

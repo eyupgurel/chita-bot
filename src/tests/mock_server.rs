@@ -1,6 +1,5 @@
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
-use log::error;
 use warp::ws::Ws;
 use warp::Filter;
 
@@ -17,7 +16,7 @@ pub async fn run_server() {
                         tx.send(msg).await.expect("Failed to send message");
                     }
                     Err(e) => {
-                        error!("Error receiving message: {:?}", e);
+                        tracing::error!("Error receiving message: {:?}", e);
                     }
                 }
             }

@@ -1,6 +1,5 @@
 use std::thread::JoinHandle;
 use std::{fs, panic, process, thread};
-use log::error;
 
 mod bluefin;
 mod env;
@@ -9,22 +8,22 @@ mod kucoin;
 mod market_maker;
 mod models;
 mod sockets;
+mod statistics;
 mod tests;
 mod utils;
-mod statistics;
 
 use crate::market_maker::mm::{MarketMaker, MM};
 
 use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Config;
-use env::EnvVars;
 use crate::statistics::stats::{Statistics, Stats};
+use env::EnvVars;
 
 fn main() {
     // Set a custom global panic hook
     panic::set_hook(Box::new(|info| {
         // Log the panic information
-        error!("Panic occurred: {:?}", info);
+        tracing::error!("Panic occurred: {:?}", info);
 
         // Exit with a non-zero status code to indicate error
         process::exit(1);
@@ -32,7 +31,10 @@ fn main() {
 
     // get env variables
     let vars: EnvVars = env::env_variables();
-    env::init_logger(vars.log_level);
+
+    // initialize trace logger and hold on to the guard. Without the guard
+    // the logs won't be written to log file
+    let _guard = env::init_logger(vars.log_level);
 
     let config_str =
         fs::read_to_string("src/config/config.json").expect("Unable to read config.json");
