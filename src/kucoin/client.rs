@@ -315,7 +315,7 @@ pub mod client {
             let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                tracing::info!("Futures order placed successfully: {}", response_body);
+                tracing::debug!("Futures order placed successfully: {}", response_body);
                 let order_id = unescape(value["data"]["orderId"].as_str().unwrap()).unwrap();
                 return CallResponse {
                     error: None,
@@ -345,7 +345,7 @@ pub mod client {
             let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                tracing::info!("Order successfully cancelled: {}", response_body);
+                tracing::debug!("Order successfully cancelled: {}", response_body);
                 return CallResponse {
                     error: None,
                     order_id: None,
