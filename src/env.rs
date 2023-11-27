@@ -1,6 +1,7 @@
 use dotenv::dotenv;
-use log::LevelFilter;
-use log4rs;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{fmt, layer::SubscriberExt};
 
 // env variable struct
 pub struct EnvVars {
@@ -118,17 +119,36 @@ pub fn env_variables() -> EnvVars {
  * Initializes logger with provided log level
  */
 #[allow(dead_code)]
-pub fn init_logger(log_level: String) {
-    log4rs::init_file("./logging_config.yaml", Default::default()).unwrap();
-
-    let filter: LevelFilter = match log_level.as_str() {
-        "Error" => LevelFilter::Error,
-        "Warn" => LevelFilter::Warn,
-        "Debug" => LevelFilter::Debug,
-        "Trace" => LevelFilter::Trace,
-        "Off" => LevelFilter::Off,
-        "Info" | _ => LevelFilter::Info,
+pub fn init_logger(log_level: String) -> WorkerGuard {
+    let filter: tracing::Level = match log_level.as_str() {
+        "Error" => tracing::Level::ERROR,
+        "Warn" => tracing::Level::WARN,
+        "Debug" => tracing::Level::DEBUG,
+        "Trace" => tracing::Level::TRACE,
+        "Info" | _ => tracing::Level::INFO,
     };
 
-    log::set_max_level(filter);
+    // TODO: move it to rolling file
+    let file_appender = RollingFileAppender::new(Rotation::NEVER, "logs", "chita-bot.log");
+
+    let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
+
+    tracing::subscriber::set_global_default(
+        fmt::Subscriber::builder()
+            // subscriber configuration
+            .with_max_level(filter)
+            .finish()
+            // add additional writers
+            .with(
+                fmt::Layer::default()
+                    .json()
+                    .flatten_event(true)
+                    .with_writer(file_writer),
+            ),
+    )
+    .expect("Unable to set global tracing subscriber");
+
+    tracing::info!("Tracer initialized");
+
+    return guard;
 }
