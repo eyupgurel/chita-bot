@@ -286,7 +286,7 @@ impl MarketMaker for MM {
 
             match self.rx_stats.try_recv() {
                 Ok(percent) => {
-                    tracing::info!("buy percent: {:?}", percent);
+                    tracing::debug!("buy percent: {:?}", percent);
                     buy_percent = percent;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -327,7 +327,7 @@ impl MarketMaker for MM {
                 1.0
             };
 
-            tracing::info!(
+            tracing::debug!(
                 "bid_skew_scale: {} ask_skew_scale: {}",
                 bid_skew_scale,
                 ask_skew_scale
@@ -345,7 +345,7 @@ impl MarketMaker for MM {
             tracing::debug!("ref ob: {:?}", &ref_book);
             tracing::debug!("mm ob: {:?}", &mm_book);
             tracing::debug!("tkr_ob: {:?}", &tkr_book);
-            tracing::info!("market making orders: {:?}", &mm);
+            tracing::debug!("market making orders: {:?}", &mm);
 
             self.place_maker_orders(&mm);
             self.last_mm_instant = Instant::now();
@@ -405,19 +405,19 @@ impl MarketMaker for MM {
         let mm_mid_price = mm_book.calculate_mid_prices();
         let spread = if ask_skew_scale > bid_skew_scale  {subtract(&mm_mid_price,&ref_mid_price)} else { subtract(&ref_mid_price,&mm_mid_price) };
         let half_spread = divide(&spread, 2.0);
-        tracing::info!("half_spread: {:?}", half_spread);
+        tracing::debug!("half_spread: {:?}", half_spread);
 
         let abs_half_spread = abs(&half_spread);
-        tracing::info!("abs_half_spread: {:?}", abs_half_spread);
+        tracing::debug!("abs_half_spread: {:?}", abs_half_spread);
 
         let bid_skew_spread = multiply(&abs_half_spread, bid_skew_scale - 1.0);
-        tracing::info!("bid_skew_spread: {:?}", bid_skew_spread);
+        tracing::debug!("bid_skew_spread: {:?}", bid_skew_spread);
 
         let mut mm_bid_prices = subtract(&mm_mid_price, &half_spread);
         mm_bid_prices = subtract(&mm_bid_prices, &bid_skew_spread);
 
         let ask_skew_spread = multiply(&abs_half_spread, ask_skew_scale - 1.0);
-        tracing::info!("ask_skew_spread: {:?}", ask_skew_spread);
+        tracing::debug!("ask_skew_spread: {:?}", ask_skew_spread);
 
         let mut mm_ask_prices = add(&mm_mid_price, &half_spread);
         mm_ask_prices = add(&mm_ask_prices, &ask_skew_spread);

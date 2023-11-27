@@ -93,7 +93,7 @@ impl Hedger for HGR {
         loop {
             match rx_bluefin_pos_change.try_recv() {
                 Ok(value) => {
-                    tracing::info!("position change: {:?}", value);
+                    tracing::debug!("position change: {:?}", value);
                     //self.bluefin_position = value;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -129,7 +129,6 @@ impl Hedger for HGR {
         let kucoin_quantity = Decimal::from(kucoin_position.unwrap().quantity);
 
         let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
-        tracing::info!("kucoin quantity:{}", current_kucoin_qty);
 
         let target_quantity = current_kucoin_qty * Decimal::from(-1);
 
@@ -139,20 +138,23 @@ impl Hedger for HGR {
         if !self.bluefin_position.side {
             bluefin_quantity = bluefin_quantity * Decimal::from(-1);
         }
-        tracing::info!("bluefin quantity:{}", bluefin_quantity);
+
         let diff = target_quantity - bluefin_quantity;
 
         let order_quantity = diff.abs();
 
         let is_buy = diff.is_sign_positive();
 
-        tracing::info!("Order quantity: {} is buy:{}", order_quantity, is_buy);
-
+        if order_quantity > Decimal::from(0) {
+            tracing::info!("kucoin quantity:{}", current_kucoin_qty);
+            tracing::info!("bluefin quantity:{}", bluefin_quantity);
+            tracing::info!("Order quantity: {} is buy:{}", order_quantity, is_buy);
+        }
         if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() {
             {
-                tracing::info!("order quantity as decimal: {}", order_quantity);
+                tracing::debug!("order quantity as decimal: {}", order_quantity);
                 let order_quantity_f64 = order_quantity.to_f64().unwrap();
-                tracing::info!("order quantity as f64: {}", order_quantity_f64);
+                tracing::debug!("order quantity as f64: {}", order_quantity_f64);
                 let order = self.bluefin_client.create_market_order(
                     &bluefin_market,
                     is_buy,
