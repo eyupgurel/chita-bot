@@ -17,7 +17,7 @@ use crate::bluefin::{BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
 
-use crate::models::common::{add, divide, subtract, BookOperations, OrderBook, round_to_precision, Market, multiply};
+use crate::models::common::{add, divide, subtract, BookOperations, OrderBook, round_to_precision, Market, multiply, abs};
 use crate::models::kucoin_models::{Level2Depth};
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
@@ -271,7 +271,7 @@ impl MarketMaker for MM {
 
             match self.rx_stats.try_recv(){
                 Ok(percent) => {
-                    error!("buy percent: {:?}", percent);
+                    info!("buy percent: {:?}", percent);
                    buy_percent = percent;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -295,6 +295,8 @@ impl MarketMaker for MM {
             let bid_skew_scale = if sell_percent < 50.0 {MM::calculate_skew_multiplier(self.market.skewing_coefficient, sell_percent)} else {1.0};
             // same as bid skewing.
             let ask_skew_scale = if buy_percent < 50.0 {MM::calculate_skew_multiplier(self.market.skewing_coefficient, buy_percent)} else {1.0};
+
+            info!("bid_skew_scale: {} ask_skew_scale: {}", bid_skew_scale, ask_skew_scale);
 
             let mm = self.create_mm_pair(ref_book, mm_book, tkr_book, bid_skew_scale,ask_skew_scale, shift);
 
@@ -355,10 +357,23 @@ impl MarketMaker for MM {
         let mm_mid_price = mm_book.calculate_mid_prices();
         let spread = subtract(&ref_mid_price, &mm_mid_price);
         let half_spread = divide(&spread, 2.0);
-        let bid_half_spread = multiply(&half_spread,bid_skew_scale);
-        let mm_bid_prices = subtract(&mm_mid_price, &bid_half_spread);
-        let ask_half_spread = multiply(&half_spread,ask_skew_scale);
-        let mm_ask_prices = add(&mm_mid_price, &ask_half_spread);
+        info!("half_spread: {:?}", half_spread);
+
+        let abs_half_spread = abs(&half_spread);
+        info!("abs_half_spread: {:?}", abs_half_spread);
+
+        let bid_skew_spread = multiply(&abs_half_spread, bid_skew_scale - 1.0);
+        info!("bid_skew_spread: {:?}", bid_skew_spread);
+
+        let mut mm_bid_prices = subtract(&mm_mid_price, &half_spread);
+        mm_bid_prices = subtract(&mm_bid_prices, &bid_skew_spread);
+
+        let ask_skew_spread = multiply(&abs_half_spread, ask_skew_scale - 1.0);
+        info!("ask_skew_spread: {:?}", ask_skew_spread);
+
+        let mut mm_ask_prices = add(&mm_mid_price, &half_spread);
+        mm_ask_prices = add(&mm_ask_prices, &ask_skew_spread);
+
         let mm_bid_sizes = tkr_book.bid_shift(shift);
         let mm_ask_sizes = tkr_book.ask_shift(shift);
         ((mm_ask_prices, mm_ask_sizes), (mm_bid_prices, mm_bid_sizes))
