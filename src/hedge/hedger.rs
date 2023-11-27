@@ -2,17 +2,15 @@ use crate::bluefin::{parse_user_position, BluefinClient, UserPosition};
 use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{Credentials, KuCoinClient};
+use crate::models::common::Market;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
-use log::{debug, info};
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use rust_decimal::Decimal;
 use serde_json::Value;
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use crate::models::common::Market;
-use rust_decimal::Decimal;
-use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
-
 
 static BIGNUMBER_BASE: u128 = 1000000000000000000;
 static HEDGE_PERIOD_DURATION: u64 = 1;
@@ -71,8 +69,7 @@ impl Hedger for HGR {
         let vars: EnvVars = env::env_variables();
         let (tx_bluefin_pos_change, rx_bluefin_pos_change) = mpsc::channel();
 
-        let bluefin_market = self
-            .market.symbols.bluefin.to_owned();
+        let bluefin_market = self.market.symbols.bluefin.to_owned();
         let bluefin_market_for_order_fill = bluefin_market.clone();
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
@@ -84,7 +81,7 @@ impl Hedger for HGR {
                 "PositionUpdate",
                 tx_bluefin_pos_change, // Sender channel of the appropriate type
                 |msg: &str| -> UserPosition {
-                    debug!("UserPosition essence:{}", msg);
+                    tracing::debug!("UserPosition essence:{}", msg);
                     let v: Value = serde_json::from_str(&msg).unwrap();
                     let message = parse_user_position(v["data"]["position"].clone());
                     message
@@ -96,7 +93,7 @@ impl Hedger for HGR {
         loop {
             match rx_bluefin_pos_change.try_recv() {
                 Ok(value) => {
-                    info!("position change: {:?}", value);
+                    tracing::info!("position change: {:?}", value);
                     //self.bluefin_position = value;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -132,40 +129,43 @@ impl Hedger for HGR {
         let kucoin_quantity = Decimal::from(kucoin_position.unwrap().quantity);
 
         let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
-        info!("kucoin quantity:{}", current_kucoin_qty);
-
+        tracing::info!("kucoin quantity:{}", current_kucoin_qty);
 
         let target_quantity = current_kucoin_qty * Decimal::from(-1);
 
-        let mut bluefin_quantity = Decimal::from_u128(self.bluefin_position.quantity).unwrap() / Decimal::from(BIGNUMBER_BASE);
-
+        let mut bluefin_quantity = Decimal::from_u128(self.bluefin_position.quantity).unwrap()
+            / Decimal::from(BIGNUMBER_BASE);
 
         if !self.bluefin_position.side {
             bluefin_quantity = bluefin_quantity * Decimal::from(-1);
         }
-        info!("bluefin quantity:{}", bluefin_quantity);
+        tracing::info!("bluefin quantity:{}", bluefin_quantity);
         let diff = target_quantity - bluefin_quantity;
 
         let order_quantity = diff.abs();
 
         let is_buy = diff.is_sign_positive();
 
-        info!("Order quantity: {} is buy:{}", order_quantity, is_buy);
+        tracing::info!("Order quantity: {} is buy:{}", order_quantity, is_buy);
 
         if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() {
             {
-                info!("order quantity as decimal: {}", order_quantity);
+                tracing::info!("order quantity as decimal: {}", order_quantity);
                 let order_quantity_f64 = order_quantity.to_f64().unwrap();
-                info!("order quantity as f64: {}", order_quantity_f64);
-                let order =
-                    self.bluefin_client
-                        .create_market_order(&bluefin_market, is_buy, false, order_quantity_f64, None);
-                info!("Order: {:#?}", order);
+                tracing::info!("order quantity as f64: {}", order_quantity_f64);
+                let order = self.bluefin_client.create_market_order(
+                    &bluefin_market,
+                    is_buy,
+                    false,
+                    order_quantity_f64,
+                    None,
+                );
+                tracing::info!("Order: {:#?}", order);
                 let signature = self.bluefin_client.sign_order(order.clone());
                 let status = self
                     .bluefin_client
                     .post_signed_order(order.clone(), signature);
-                info!("{:?}", status);
+                tracing::info!("{:?}", status);
 
                 // Optimistic approach to prevent oscillations. For now update local position as if the position if filled immediately.
                 let bf_pos_sign: i128 = if self.bluefin_position.side { 1 } else { -1 };
@@ -178,6 +178,5 @@ impl Hedger for HGR {
                 self.bluefin_position.side = if new_pos > 0 { true } else { false };
             }
         }
-
     }
 }

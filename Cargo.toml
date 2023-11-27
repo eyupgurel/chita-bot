@@ -38,5 +38,7 @@ chrono = "0.4.31"
 bigdecimal = "0.4.2"
 thiserror = "1.0.50"
 snailquote = "0.3.1"
-log4rs = "1.2.0"
 rust_decimal = "1.17.0"
+tracing-subscriber = { version = "0.3.16", features = ["json"] }
+tracing = "0.1.40"
+tracing-appender = "0.2.3"

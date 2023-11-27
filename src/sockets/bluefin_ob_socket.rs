@@ -1,17 +1,15 @@
+use crate::env;
+use crate::env::EnvVars;
 use crate::models::common::OrderBook;
 use crate::sockets::common::OrderBookStream;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
-use log::{error, info};
-use tungstenite::stream::MaybeTlsStream;
 use tungstenite::protocol::Message;
+use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, WebSocket};
 use url::Url;
-use crate::env;
-use crate::env::EnvVars;
-
 
 pub struct BluefinOrderBookStream<T> {
     phantom: std::marker::PhantomData<T>, // Use PhantomData to indicate the generic type usage
@@ -33,7 +31,7 @@ where
 {
     fn get_ob_socket(&self, url: &str, market: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
         let (mut socket, _response) = connect(Url::parse(url).unwrap()).expect("Can't connect.");
-        info!("Connected to Bluefin stream at url:{}.", &url);
+        tracing::info!("Connected to Bluefin stream at url:{}.", &url);
         // Construct the message
         let sub_message = json!([
             "SUBSCRIBE",
@@ -46,11 +44,7 @@ where
         ]);
 
         // Send the message
-        socket
-            .send(Message::Text(
-                sub_message.to_string(),
-            ))
-            .unwrap();
+        socket.send(Message::Text(sub_message.to_string())).unwrap();
 
         let read = socket.read().expect("Error reading message");
 
@@ -83,7 +77,6 @@ where
                 Ok(message) => {
                     match message {
                         Message::Text(msg) => {
-
                             if !msg.contains("OrderbookDepthUpdate") {
                                 continue;
                             }
@@ -94,16 +87,23 @@ where
                             let current_first_ask_price = ob.asks.first().map(|ask| ask.0.clone());
                             let current_first_bid_price = ob.bids.first().map(|bid| bid.0.clone());
 
-                            let is_first_ask_price_changed = match (current_first_ask_price, last_first_ask_price) {
-                                (Some(current), Some(last)) =>
-                                    (current - last).abs() / last * 10000.0 >= vars.market_making_trigger_bps,
-                                _ => false, // Consider unchanged if either current or last price is None
-                            };
+                            let is_first_ask_price_changed =
+                                match (current_first_ask_price, last_first_ask_price) {
+                                    (Some(current), Some(last)) => {
+                                        (current - last).abs() / last * 10000.0
+                                            >= vars.market_making_trigger_bps
+                                    }
+                                    _ => false, // Consider unchanged if either current or last price is None
+                                };
 
-                            let is_first_bid_price_changed = match (current_first_bid_price, last_first_bid_price) {
-                                (Some(current), Some(last)) => (current - last).abs() / last * 10000.0 >= vars.market_making_trigger_bps,
-                                _ => false, // Consider unchanged if either current or last price is None
-                            };
+                            let is_first_bid_price_changed =
+                                match (current_first_bid_price, last_first_bid_price) {
+                                    (Some(current), Some(last)) => {
+                                        (current - last).abs() / last * 10000.0
+                                            >= vars.market_making_trigger_bps
+                                    }
+                                    _ => false, // Consider unchanged if either current or last price is None
+                                };
 
                             // Update the last known prices
                             last_first_ask_price = current_first_ask_price;
@@ -114,19 +114,18 @@ where
                                 tx_diff.send(ob.clone()).unwrap();
                             }
                             tx.send(ob).unwrap();
-                        },
+                        }
                         Message::Ping(ping_data) => {
                             // Handle the Ping message, e.g., by sending a Pong response
                             socket.write(Message::Pong(ping_data)).unwrap();
-                        },
+                        }
                         other => {
-                            error!("Error: Received unexpected message type: {:?}", other);
+                            tracing::error!("Error: Received unexpected message type: {:?}", other);
                         }
                     }
-
                 }
                 Err(e) => {
-                    error!("Error during message handling: {:?}", e);
+                    tracing::error!("Error during message handling: {:?}", e);
                     socket = self.get_ob_socket(url, market);
                 }
             }

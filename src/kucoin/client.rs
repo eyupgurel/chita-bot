@@ -8,7 +8,6 @@ pub mod client {
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
-    use log::{debug, info, warn};
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
     use serde_json::{json, Value};
     use sha2::Sha256;
@@ -82,7 +81,7 @@ pub mod client {
                 markets,
             };
 
-            info!("KuCoin client initialized");
+            tracing::info!("KuCoin client initialized");
 
             return kucoin_client;
         }
@@ -151,12 +150,22 @@ pub mod client {
                 .text()
                 .unwrap();
 
-            let resp: RecentFillsResponse = serde_json::from_str(&res).expect("JSON Decoding failed");
+            let resp: RecentFillsResponse =
+                serde_json::from_str(&res).expect("JSON Decoding failed");
 
             return resp;
         }
 
-        pub fn get_fills(&self, market: &str, side: Option<&str>, order_type: Option<&str>, start_at: Option<u128>, end_at: Option<u128>, current_page: Option<u64>, page_size: Option<u64>) -> FillsResponse {
+        pub fn get_fills(
+            &self,
+            market: &str,
+            side: Option<&str>,
+            order_type: Option<&str>,
+            start_at: Option<u128>,
+            end_at: Option<u128>,
+            current_page: Option<u64>,
+            page_size: Option<u64>,
+        ) -> FillsResponse {
             let endpoint = String::from("/api/v1/fills");
 
             let market_symbol = self.markets.get(market).unwrap();
@@ -189,7 +198,6 @@ pub mod client {
                 params.insert(String::from("pageSize"), u.to_string());
             };
 
-
             let query = utils::format_query(&params);
 
             let url: String = format!("{}{}{}", &self.api_gateway, endpoint, query);
@@ -212,9 +220,24 @@ pub mod client {
         }
 
         pub fn get_fill_size_for_time_window(&self, market: &str, side: &str, since: u128) -> i32 {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("could not get current time since unix epoch").as_millis();
-            let fills = self.get_fills(market,Some(side), None,Some(since), Some(now), None, Some(1000));
-            let total_size = fills.data.items.iter().fold(0,|acc,trade| acc + trade.size);
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("could not get current time since unix epoch")
+                .as_millis();
+            let fills = self.get_fills(
+                market,
+                Some(side),
+                None,
+                Some(since),
+                Some(now),
+                None,
+                Some(1000),
+            );
+            let total_size = fills
+                .data
+                .items
+                .iter()
+                .fold(0, |acc, trade| acc + trade.size);
             total_size
         }
         pub fn get_position(&self, market: &str) -> Option<UserPosition> {
@@ -245,11 +268,11 @@ pub mod client {
                 let user_position: UserPosition =
                     serde_json::from_value(value["data"].clone()).unwrap();
 
-                debug!("Got position: {:#?}", user_position);
+                tracing::debug!("Got position: {:#?}", user_position);
                 return Some(user_position);
             } else {
                 let error: Error = serde_json::from_str(&res).expect("JSON Decoding failed");
-                warn!("Error getting kucoin position: {:#?}", error);
+                tracing::warn!("Error getting kucoin position: {:#?}", error);
                 return None;
             }
         }
@@ -292,7 +315,7 @@ pub mod client {
             let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                info!("Futures order placed successfully: {}", response_body);
+                tracing::info!("Futures order placed successfully: {}", response_body);
                 let order_id = unescape(value["data"]["orderId"].as_str().unwrap()).unwrap();
                 return CallResponse {
                     error: None,
@@ -302,7 +325,7 @@ pub mod client {
                 let error: Error =
                     serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
-                warn!("Error placing futures order: {:#?}", error);
+                tracing::warn!("Error placing futures order: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
@@ -322,7 +345,7 @@ pub mod client {
             let value: Value = serde_json::from_str(&response_body).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                info!("Order successfully cancelled: {}", response_body);
+                tracing::info!("Order successfully cancelled: {}", response_body);
                 return CallResponse {
                     error: None,
                     order_id: None,
@@ -330,7 +353,7 @@ pub mod client {
             } else {
                 let error: Error =
                     serde_json::from_str(response_body.as_str()).expect("JSON Decoding failed");
-                warn!("Error cancelling order: {:#?}", error);
+                tracing::warn!("Error cancelling order: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
@@ -362,7 +385,7 @@ pub mod client {
 
             if resp.status().is_success() {
                 let response_body = resp.text().unwrap();
-                debug!("Order successfully cancelled");
+                tracing::debug!("Order successfully cancelled");
                 return CallResponse {
                     error: None,
                     order_id: None,
@@ -370,7 +393,7 @@ pub mod client {
             } else {
                 let error: Error =
                     serde_json::from_str(&resp.text().unwrap()).expect("JSON Decoding failed");
-                warn!("Error cancelling orders: {:#?}", error);
+                tracing::warn!("Error cancelling orders: {:#?}", error);
                 return CallResponse {
                     error: Some(error),
                     order_id: None,
@@ -568,7 +591,11 @@ pub mod client {
     }
     #[test]
     fn should_get_recent_fills() {
-        let credentials = Credentials::new("654bad2744b9f1000170a857", "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a", "6aabPMdj!!4Xt3Y&");
+        let credentials = Credentials::new(
+            "654bad2744b9f1000170a857",
+            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
+            "6aabPMdj!!4Xt3Y&",
+        );
 
         let client = KuCoinClient::new(
             credentials,
@@ -585,7 +612,11 @@ pub mod client {
 
     #[test]
     fn should_get_fills() {
-        let credentials = Credentials::new("654bad2744b9f1000170a857", "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a", "6aabPMdj!!4Xt3Y&");
+        let credentials = Credentials::new(
+            "654bad2744b9f1000170a857",
+            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
+            "6aabPMdj!!4Xt3Y&",
+        );
 
         let client = KuCoinClient::new(
             credentials,
@@ -595,14 +626,26 @@ pub mod client {
             3,
         );
 
-        let resp = client.get_fills("ETH-PERP", None, None, Some(1700665497000), Some(1700838297000), None, None);
+        let resp = client.get_fills(
+            "ETH-PERP",
+            None,
+            None,
+            Some(1700665497000),
+            Some(1700838297000),
+            None,
+            None,
+        );
 
         assert_eq!(resp.code, "200000", "Error getting recent fills");
     }
 
     #[test]
     fn should_get_total_fill_size() {
-        let credentials = Credentials::new("654bad2744b9f1000170a857", "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a", "6aabPMdj!!4Xt3Y&");
+        let credentials = Credentials::new(
+            "654bad2744b9f1000170a857",
+            "cc0f02dd-9070-4f65-8d60-8bc0d6bfcd8a",
+            "6aabPMdj!!4Xt3Y&",
+        );
 
         let client = KuCoinClient::new(
             credentials,
@@ -612,11 +655,15 @@ pub mod client {
             3,
         );
 
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("could not get current time since unix epoch").as_millis();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("could not get current time since unix epoch")
+            .as_millis();
         let since = now - 1000 * 60 * 60 * 24;
         let total_buy_size = client.get_fill_size_for_time_window("BTC-PERP", "buy", since);
         let total_sell_size = client.get_fill_size_for_time_window("BTC-PERP", "sell", since);
-        let buy_percent = (total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0;
+        let buy_percent =
+            (total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0;
 
         assert_eq!(total_buy_size, 1, "Error getting recent fills");
         assert_eq!(total_sell_size, 5, "Error getting recent fills");

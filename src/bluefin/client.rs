@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 pub mod client {
-    use log::{debug, error, info, warn};
     use std::net::TcpStream;
     use tungstenite::connect;
 
@@ -104,7 +103,7 @@ pub mod client {
             // get market ids from dapi
             client.fetch_markets();
 
-            info!(
+            tracing::info!(
                 "Bluefin client initialized for wallet: {}",
                 client.wallet.address
             );
@@ -149,9 +148,10 @@ pub mod client {
             let response: Value = serde_json::from_str(&res).unwrap();
             if response["error"].is_object() {
                 let error: Error = serde_json::from_str(&response["error"].to_string()).unwrap();
-                error!(
+                tracing::error!(
                     "Error while onboarding - code: {}, message: {}",
-                    error.code, error.message
+                    error.code,
+                    error.message
                 );
                 panic!()
             }
@@ -301,13 +301,13 @@ pub mod client {
                 .text()
                 .unwrap();
 
-            debug!("Response: {}", res);
+            tracing::debug!("Response: {}", res);
 
             let response: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
 
             if response["error"].is_object() {
                 let error: Error = serde_json::from_str(&response["error"].to_string()).unwrap();
-                warn!("Order placement failed: {}", error.message);
+                tracing::warn!("Order placement failed: {}", error.message);
                 return PostResponse { error: Some(error) };
             } else {
                 return PostResponse { error: None };
@@ -322,7 +322,7 @@ pub mod client {
             ) -> tungstenite::WebSocket<MaybeTlsStream<TcpStream>> {
                 let (mut bluefin_socket, _) =
                     connect(url::Url::parse(url.as_str()).unwrap()).expect("Failed to connect");
-                info!("Connected to Bluefin stream at url:{}.", &url);
+                tracing::info!("Connected to Bluefin stream at url:{}.", &url);
 
                 let request = json!([
                     "SUBSCRIBE",
@@ -339,9 +339,9 @@ pub mod client {
                 if let Err(err) =
                     bluefin_socket.send(tungstenite::protocol::Message::Text(request.to_string()))
                 {
-                    error!("Error subscribing to user updates: {err:?}");
+                    tracing::error!("Error subscribing to user updates: {err:?}");
                 } else {
-                    info!("Subscribed to user update room");
+                    tracing::info!("Subscribed to user update room");
                 };
 
                 return bluefin_socket;
@@ -383,7 +383,7 @@ pub mod client {
                     }
 
                     Err(e) => {
-                        warn!("Error during message handling: {:?}", e);
+                        tracing::warn!("Error during message handling: {:?}", e);
                         bluefin_socket =
                             connect_socket(self.websocket_url.clone(), self.auth_token.clone())
                     }
