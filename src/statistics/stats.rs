@@ -51,7 +51,7 @@ impl Statistics for Stats {
             let total_buy_size = self.kucoin_client.get_fill_size_for_time_window(&bluefin_market, "buy", service_start);
             let total_sell_size = self.kucoin_client.get_fill_size_for_time_window(&bluefin_market, "sell", service_start);
             let buy_percent = if total_buy_size + total_sell_size == 0 {50.0} else  {(total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0};
-            info!("buy percent:{}", buy_percent);
+            info!("total_buy_size: {} total_sell_size: {} buy_percent: {}", total_buy_size, total_sell_size, buy_percent);
             self.tx_stats.send(buy_percent).expect("Error in sending stats");
 
             thread::sleep(Duration::from_secs(60));

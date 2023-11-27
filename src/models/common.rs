@@ -93,6 +93,17 @@ pub fn multiply(multiplicand: &[f64], multiplier: f64) -> Vec<f64> {
         .collect()
 }
 
+pub fn abs(values: &[f64]) -> Vec<f64> {
+    values.iter()
+        .map(|&value| value.abs())
+        .collect()
+}
+
+#[allow(dead_code)]
+pub fn is_positive(values: &[f64]) -> bool {
+    values[0] > 0.0
+}
+
 pub fn deserialize_optional_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
     where
         D: Deserializer<'de>,
