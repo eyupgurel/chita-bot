@@ -84,6 +84,10 @@ impl Hedger for HGR {
                     tracing::debug!("UserPosition essence:{}", msg);
                     let v: Value = serde_json::from_str(&msg).unwrap();
                     let message = parse_user_position(v["data"]["position"].clone());
+                    let quantity = Decimal::from_u128(message.quantity).unwrap() / Decimal::from(BIGNUMBER_BASE);
+                    let avg_entry_price = Decimal::from_u128(message.avg_entry_price).unwrap() / Decimal::from(BIGNUMBER_BASE);
+                    let volume = quantity * avg_entry_price;
+                    tracing::info!("Bluefin volume: {}", volume);
                     message
                 },
             );
