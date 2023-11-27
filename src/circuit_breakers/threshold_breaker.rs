@@ -1,6 +1,4 @@
-use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
-use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
-use crate::models::common::CircuitBreakerConfig;
+use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase};
 
 pub struct ThresholdFormula {
     user_balance_base: f64,
@@ -9,11 +7,11 @@ pub struct ThresholdFormula {
 
 impl ThresholdFormula {
     pub fn get_current_user_balance(&self) -> f64 {
-
+        return 0.00;
     }
 
     pub fn cache_user_balance() -> f64 {
-
+        return 0.00;
     }
 }
 
