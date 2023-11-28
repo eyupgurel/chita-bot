@@ -7,11 +7,11 @@ pub struct ThresholdFormula {
 
 impl ThresholdFormula {
     pub fn get_current_user_balance(&self) -> f64 {
-        return 0.00;
+        return 0.00; todo!()
     }
 
     pub fn cache_user_balance() -> f64 {
-        return 0.00;
+        return 0.00; todo!()
     }
 }
 
