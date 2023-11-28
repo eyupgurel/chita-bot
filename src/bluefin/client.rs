@@ -20,6 +20,8 @@ pub mod client {
         orders::{create_order, to_order_request, Order},
     };
     use tungstenite::stream::MaybeTlsStream;
+    use crate::bluefin::models::AccountData;
+
     pub struct BluefinClient {
         wallet: Wallet,
         api_gateway: String,
@@ -218,6 +220,25 @@ pub mod client {
                     leverage: 0,
                 };
             };
+        }
+
+        pub fn get_user_account(&self) -> AccountData {
+
+            let res = self
+                .client
+                .get(format!("{}/account", self.api_gateway))
+                .header(
+                    "Authorization",
+                    format!("Bearer {}", &self.auth_token.to_owned()),
+                )
+                .send()
+                .unwrap()
+                .text()
+                .unwrap();
+
+            let account: AccountData = serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            account
         }
 
         pub fn create_limit_ioc_order(

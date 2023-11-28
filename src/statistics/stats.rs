@@ -66,7 +66,7 @@ impl Statistics for Stats {
                 (total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0
             };
             tracing::info!(
-                "total_buy_size: {} total_sell_size: {} buy_percent: {}",
+                "total_buy_size={} total_sell_size={} buy_percent={}",
                 total_buy_size,
                 total_sell_size,
                 buy_percent

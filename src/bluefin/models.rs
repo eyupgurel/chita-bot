@@ -1,6 +1,8 @@
 use ed25519_dalek::*;
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use serde_json::Value;
+use crate::models::common::deserialize_decimal;
 
 #[derive(Deserialize, Debug)]
 pub struct Auth {
@@ -59,4 +61,62 @@ pub fn parse_user_position(position: Value) -> UserPosition {
         margin: margin_str.parse::<u128>().unwrap(),
         leverage: leverage_str.parse::<u128>().unwrap(),
     };
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountUpdateEventData {
+    pub event_name: String,
+    pub data: AccountUpdateData,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountUpdateData {
+    #[serde(rename = "accountData")]
+    pub account_data: AccountData,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountData {
+    pub address: String,
+    pub can_trade: bool,
+    pub update_time: u64,
+    pub fee_tier: String,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub wallet_balance: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub total_position_qty_reduced: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub total_position_qty_reducible: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub total_position_margin: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub total_unrealized_profit: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub total_expected_pnl: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub free_collateral: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub account_value: Decimal,
+    pub account_data_by_market: Vec<MarketData>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketData {
+    pub symbol: String,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub position_qty_reduced: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub position_qty_reducible: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub position_margin: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub unrealized_profit: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub expected_pnl: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    pub selected_leverage: Decimal,
 }

@@ -3,6 +3,7 @@ use serde::{de, Deserialize, Deserializer};
 use serde::de::{SeqAccess, Visitor};
 use bigdecimal::{BigDecimal, ToPrimitive};
 use std::str::FromStr;
+use rust_decimal::Decimal;
 use thiserror::Error;
 
 // Define a struct for the symbol mappings for each market
@@ -198,6 +199,17 @@ pub fn deserialize_as_bignumber_string_tuples<'de, D>(deserializer: D) -> Result
 
     Ok(number_tuples)
 }
+
+pub fn deserialize_decimal<'de, D>(deserializer: D) -> Result<Decimal, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let parsed = Decimal::from_str(&s).map_err(serde::de::Error::custom)?;
+    let divisor = Decimal::from_str("1000000000000000000").unwrap();
+    Ok(parsed / divisor)
+}
+
 
 pub fn round_to_precision(value: f64, precision: i32) -> f64 {
     let scale = 10f64.powi(precision);
