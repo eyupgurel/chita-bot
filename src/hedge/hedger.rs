@@ -1,4 +1,4 @@
-use crate::bluefin::{parse_user_position, BluefinClient, UserPosition};
+use crate::bluefin::{parse_user_position, BluefinClient, UserPosition, AccountData, AccountUpdateEventData};
 use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{Credentials, KuCoinClient};
@@ -19,6 +19,8 @@ pub struct HGR {
     pub market: Market,
     bluefin_client: BluefinClient,
     kucoin_client: KuCoinClient,
+    #[allow(dead_code)]
+    bluefin_account: AccountData,
     bluefin_position: UserPosition,
 }
 
@@ -47,6 +49,8 @@ impl HGR {
         );
 
         let bluefin_market = market.symbols.bluefin.to_owned();
+
+        let bluefin_account = bluefin_client.get_user_account();
         let bluefin_position = bluefin_client.get_user_position(&bluefin_market);
 
         HGR {
@@ -54,6 +58,7 @@ impl HGR {
             bluefin_client,
             kucoin_client,
             bluefin_position,
+            bluefin_account
         }
     }
 }
@@ -67,21 +72,21 @@ pub trait Hedger {
 impl Hedger for HGR {
     fn connect(&mut self) {
         let vars: EnvVars = env::env_variables();
-        let (tx_bluefin_pos_change, rx_bluefin_pos_change) = mpsc::channel();
+        let (tx_bluefin_pos_update, _rx_bluefin_pos_update) = mpsc::channel();
+        let (tx_bluefin_account_data_update, _rx_bluefin_account_data_update) = mpsc::channel();
 
         let bluefin_market = self.market.symbols.bluefin.to_owned();
         let bluefin_market_for_order_fill = bluefin_market.clone();
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
-        let _handle_bluefin_of = thread::spawn(move || {
+        let _handle_bluefin_pos_update = thread::spawn(move || {
             stream_bluefin_private_socket(
                 &bluefin_websocket_url,
                 &bluefin_market_for_order_fill,
                 &bluefin_auth_token,
                 "PositionUpdate",
-                tx_bluefin_pos_change, // Sender channel of the appropriate type
+                tx_bluefin_pos_update, // Sender channel of the appropriate type
                 |msg: &str| -> UserPosition {
-                    tracing::debug!("UserPosition essence:{}", msg);
                     let v: Value = serde_json::from_str(&msg).unwrap();
                     let message = parse_user_position(v["data"]["position"].clone());
                     let quantity = Decimal::from_u128(message.quantity).unwrap() / Decimal::from(BIGNUMBER_BASE);
@@ -92,22 +97,35 @@ impl Hedger for HGR {
                 },
             );
         });
+        let bluefin_market = self.market.symbols.bluefin.to_owned();
+        let bluefin_market_for_order_fill = bluefin_market.clone();
+        let bluefin_auth_token = self.bluefin_client.auth_token.clone();
+        let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
+        let _handle_bluefin_account_data_update = thread::spawn(move || {
+            stream_bluefin_private_socket(
+                &bluefin_websocket_url,
+                &bluefin_market_for_order_fill,
+                &bluefin_auth_token,
+                "AccountDataUpdate",
+                tx_bluefin_account_data_update, // Sender channel of the appropriate type
+                |msg: &str| -> AccountData {
+                    let account_event_update_data: AccountUpdateEventData = serde_json::from_str(&msg).unwrap();
+                    let ad = account_event_update_data.data.account_data;
+                    tracing::info!("wallet_balance={} total_position_qty_reduced={} total_position_qty_reducible={} total_position_margin={} total_unrealized_profit={} total_expected_pnl={} free_collateral={} account_value={}",
+                        ad.wallet_balance,
+                        ad.total_position_qty_reduced,
+                        ad.total_position_qty_reducible,
+                        ad.total_position_margin,
+                        ad.total_unrealized_profit,
+                        ad.total_expected_pnl,
+                        ad.free_collateral,
+                        ad.account_value);
+                    ad
+                },
+            );
+        });
         thread::sleep(Duration::from_secs(5));
         self.hedge();
-        loop {
-            match rx_bluefin_pos_change.try_recv() {
-                Ok(value) => {
-                    tracing::debug!("position change: {:?}", value);
-                    //self.bluefin_position = value;
-                }
-                Err(mpsc::TryRecvError::Empty) => {
-                    // No message from binance yet
-                }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    panic!("Bluefin worker has disconnected!");
-                }
-            }
-        }
     }
 
     fn hedge(&mut self) {
