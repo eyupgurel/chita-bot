@@ -1,8 +1,8 @@
 {
-  "circuit_breakers": {
+
+  "circuit_breaker_config": {
     "num_retries": 3,
-    "failure_threshold": 3,
-    "reset_timer": 60
+    "failure_threshold": 3
   },
 
 
