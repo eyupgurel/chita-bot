@@ -87,7 +87,7 @@ impl Hedger for HGR {
                     let quantity = Decimal::from_u128(message.quantity).unwrap() / Decimal::from(BIGNUMBER_BASE);
                     let avg_entry_price = Decimal::from_u128(message.avg_entry_price).unwrap() / Decimal::from(BIGNUMBER_BASE);
                     let volume = quantity * avg_entry_price;
-                    tracing::info!("Bluefin volume: {}", volume);
+                    tracing::info!("bluefin_volume={}", volume);
                     message
                 },
             );
@@ -150,9 +150,7 @@ impl Hedger for HGR {
         let is_buy = diff.is_sign_positive();
 
         if order_quantity > Decimal::from(0) {
-            tracing::info!("kucoin quantity:{}", current_kucoin_qty);
-            tracing::info!("bluefin quantity:{}", bluefin_quantity);
-            tracing::info!("Order quantity: {} is buy:{}", order_quantity, is_buy);
+            tracing::info!("current_kucoin_qty={} bluefin_quantity={} order_quantity={} is_buy={}", current_kucoin_qty, bluefin_quantity, order_quantity, is_buy);
         }
         if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() {
             {
@@ -166,12 +164,12 @@ impl Hedger for HGR {
                     order_quantity_f64,
                     None,
                 );
-                tracing::info!("Order: {:#?}", order);
+                tracing::info!("order={:#?}", order);
                 let signature = self.bluefin_client.sign_order(order.clone());
                 let status = self
                     .bluefin_client
                     .post_signed_order(order.clone(), signature);
-                tracing::info!("{:?}", status);
+                tracing::info!("status={:?}", status);
 
                 // Optimistic approach to prevent oscillations. For now update local position as if the position if filled immediately.
                 let bf_pos_sign: i128 = if self.bluefin_position.side { 1 } else { -1 };
