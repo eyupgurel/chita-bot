@@ -25,9 +25,17 @@ pub struct Market {
     pub symbols: Symbol,
 }
 
+//Config for Circuit Breakers
+#[derive(Deserialize, Debug, Clone, Copy)]
+pub struct CircuitBreakerConfig {
+    pub num_retries: u8,
+    pub failure_threshold: u8
+}
+
 // Define the overall structure
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
+    pub circuit_breaker_config: CircuitBreakerConfig,
     pub markets: Vec<Market>,
 }
 

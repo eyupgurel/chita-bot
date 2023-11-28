@@ -1,4 +1,11 @@
 {
+
+  "circuit_breaker_config": {
+    "num_retries": 3,
+    "failure_threshold": 3
+  },
+
+
   "markets": [
     {
       "name": "eth",
