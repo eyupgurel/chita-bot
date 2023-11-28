@@ -67,17 +67,17 @@ impl KuCoinBreaker {
 
         while retry < cb_config.num_retries && resp.error.is_some() {
             if last_retry.elapsed() >= Duration::from_millis(self.env_vars.market_making_time_throttle_period) {
-                warn!("KuCoin cancel all orders failed. Retrying {} times, current retry: {}", cb_config.num_retries, retry + 1);
+                tracing::warn!("KuCoin cancel all orders failed. Retrying {} times, current retry: {}", cb_config.num_retries, retry + 1);
                 resp = self.client.cancel_all_orders(Some(market.as_str()));
                 retry += 1;
                 last_retry = Instant::now();
             }
         }
         return if retry == cb_config.num_retries {
-            warn!("Retry number exceeded. Could not cancel orders on KuCoin after Circuit Breaker opened.");
+            tracing::warn!("Retry number exceeded. Could not cancel orders on KuCoin after Circuit Breaker opened.");
             false
         } else {
-            info!("Successfully cancelled all orders after Circuit Breaker opened");
+            tracing::info!("Successfully cancelled all orders after Circuit Breaker opened");
             true
         }
     }

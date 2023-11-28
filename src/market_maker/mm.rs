@@ -232,7 +232,7 @@ impl MarketMaker for MM {
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    error!("Kucoin worker has disconnected!");
+                    tracing::error!("Kucoin worker has disconnected!");
                     if !kucoin_ob_disconnect_breaker.is_open() {
                         kucoin_ob_disconnect_breaker.on_failure();
                     }
@@ -254,7 +254,7 @@ impl MarketMaker for MM {
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    error!("Kucoin worker has disconnected!");
+                    tracing::error!("Kucoin worker has disconnected!");
                     if !kucoin_ticker_disconnect_breaker.is_open() {
                         kucoin_ticker_disconnect_breaker.on_failure();
                     }
@@ -271,7 +271,7 @@ impl MarketMaker for MM {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    error!("Binance worker has disconnected!");
+                    tracing::error!("Binance worker has disconnected!");
                     if !binance_ob_disconnect_breaker.is_open() {
                         binance_ob_disconnect_breaker.on_failure();
                     }
@@ -293,7 +293,7 @@ impl MarketMaker for MM {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    error!("Binance worker has disconnected!");
+                    tracing::error!("Binance worker has disconnected!");
                     if !binance_ob_diff_disconnect_breaker.is_open() {
                         binance_ob_diff_disconnect_breaker.on_failure();
                     }
@@ -311,7 +311,7 @@ impl MarketMaker for MM {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    error!("Bluefin worker has disconnected!");
+                    tracing::error!("Bluefin worker has disconnected!");
                     if !bluefin_ob_disconnect_breaker.is_open() {
                         bluefin_ob_disconnect_breaker.on_failure();
                     }
@@ -333,7 +333,7 @@ impl MarketMaker for MM {
                     // No message from binance yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    error!("Bluefin worker has disconnected!");
+                    tracing::error!("Bluefin worker has disconnected!");
                     if !bluefin_ob_diff_disconnect_breaker.is_open() {
                         bluefin_ob_diff_disconnect_breaker.on_failure();
                     }
@@ -350,7 +350,7 @@ impl MarketMaker for MM {
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    error!("statistic worker has disconnected!");
+                    tracing::error!("statistic worker has disconnected!");
                     if !rx_stats_disconnect_breaker.is_open() {
                         rx_stats_disconnect_breaker.on_failure();
                     }
