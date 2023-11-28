@@ -192,14 +192,15 @@ pub fn deserialize_as_bignumber_string_tuples<'de, D>(deserializer: D) -> Result
     Ok(number_tuples)
 }
 
-pub fn deserialize_decimal<'de, D>(deserializer: D) -> Result<Decimal, D::Error>
+pub fn deserialize_to_f64_via_decimal<'de, D>(deserializer: D) -> Result<f64, D::Error>
     where
         D: serde::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
     let parsed = Decimal::from_str(&s).map_err(serde::de::Error::custom)?;
     let divisor = Decimal::from_str("1000000000000000000").unwrap();
-    Ok(parsed / divisor)
+    let decimal_value = parsed / divisor;
+    Ok(decimal_value.to_f64().unwrap())
 }
 
 
