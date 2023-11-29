@@ -134,7 +134,7 @@ impl Hedger for HGR {
                         total_expected_pnl = ad.total_expected_pnl,
                         free_collateral = ad.free_collateral,
                         account_value = ad.account_value,
-                        "Account Data"
+                        "Bluefin Account Data"
                     );
                     ad
                 },
