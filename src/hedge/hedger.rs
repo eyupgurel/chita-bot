@@ -99,7 +99,7 @@ impl Hedger for HGR {
                     let open_qty = Decimal::from_u128(order_update.open_qty).unwrap()
                         / Decimal::from(BIGNUMBER_BASE);
 
-                    if open_qty.is_zero(){
+                    if open_qty.is_zero() && order_update.symbol == bluefin_market {
                         let quantity = Decimal::from_u128(order_update.quantity).unwrap()
                             / Decimal::from(BIGNUMBER_BASE);
                         let avg_fill_price = Decimal::from_u128(order_update.avg_fill_price).unwrap()
