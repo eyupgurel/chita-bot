@@ -72,8 +72,8 @@ impl HGR {
 
 pub trait Hedger {
     fn connect(&mut self);
-    fn hedge(&mut self);
-    fn hedge_pos(&mut self);
+    fn hedge(&mut self, dry_run:bool);
+    fn hedge_pos(&mut self, dry_run:bool);
 }
 
 impl Hedger for HGR {
@@ -141,17 +141,19 @@ impl Hedger for HGR {
             );
         });
         thread::sleep(Duration::from_secs(5));
-        self.hedge();
+        let dry_run = vars.dry_run;
+        self.hedge(dry_run);
     }
 
-    fn hedge(&mut self) {
+    fn hedge(&mut self, dry_run:bool) {
         loop {
-            self.hedge_pos();
+            self.hedge_pos(dry_run);
             // Sleep for one second before next iteration
             thread::sleep(Duration::from_secs(HEDGE_PERIOD_DURATION));
         }
     }
-    fn hedge_pos(&mut self) {
+    fn hedge_pos(&mut self, dry_run:bool) {
+
         let bluefin_market = self.market.symbols.bluefin.to_owned();
 
         // the call now returns Option(UserPosition)
@@ -163,8 +165,10 @@ impl Hedger for HGR {
             return;
         }
 
+        let kucoin_position = kucoin_position.unwrap();
+
         // unwrap kucoin position and get quantity
-        let kucoin_quantity = Decimal::from(kucoin_position.unwrap().quantity);
+        let kucoin_quantity = Decimal::from(kucoin_position.quantity);
 
         let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
 
@@ -191,9 +195,20 @@ impl Hedger for HGR {
                 is_buy = is_buy,
                 "Positions Across"
             );
+
+            tracing::info!(
+                market = bluefin_market,
+                avg_entry_price = kucoin_position.avg_entry_price,
+                realised_pnl = kucoin_position.realised_pnl,
+                unrealised_pnl = kucoin_position.unrealised_pnl,
+                unrealised_pnl_pcnt = kucoin_position.unrealised_pnl_pcnt,
+                unrealised_roe_pcnt = kucoin_position.unrealised_roe_pcnt,
+                liquidation_price = kucoin_position.liquidation_price,
+                "Kucoin position"
+            );
         }
 
-        if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() {
+        if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() && !dry_run {
             {
                 tracing::debug!("order quantity as decimal: {}", order_quantity);
                 let order_quantity_f64 = order_quantity.to_f64().unwrap();
