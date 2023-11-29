@@ -44,12 +44,21 @@ pub struct UserPosition {
     // pub side: bool,
     #[serde(rename = "avgEntryPrice")]
     pub avg_entry_price: f64,
-
     #[serde(rename = "currentQty")]
     pub quantity: i128,
     // pub margin: u128,
     #[serde(rename = "realLeverage")]
     pub leverage: f64,
+    #[serde(rename = "realisedPnl")]
+    pub realised_pnl: f64,
+    #[serde(rename = "unrealisedPnl")]
+    pub unrealised_pnl: f64,
+    #[serde(rename = "unrealisedPnlPcnt")]
+    pub unrealised_pnl_pcnt: f64,
+    #[serde(rename = "unrealisedRoePcnt")]
+    pub unrealised_roe_pcnt: f64,
+    #[serde(rename = "liquidationPrice")]
+    pub liquidation_price: f64,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

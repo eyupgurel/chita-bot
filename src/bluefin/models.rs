@@ -1,6 +1,7 @@
 use ed25519_dalek::*;
 use serde::Deserialize;
 use serde_json::Value;
+use crate::models::common::deserialize_to_f64_via_decimal;
 
 #[derive(Deserialize, Debug)]
 pub struct Auth {
@@ -59,4 +60,62 @@ pub fn parse_user_position(position: Value) -> UserPosition {
         margin: margin_str.parse::<u128>().unwrap(),
         leverage: leverage_str.parse::<u128>().unwrap(),
     };
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountUpdateEventData {
+    pub event_name: String,
+    pub data: AccountUpdateData,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountUpdateData {
+    #[serde(rename = "accountData")]
+    pub account_data: AccountData,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountData {
+    pub address: String,
+    pub can_trade: bool,
+    pub update_time: u64,
+    pub fee_tier: String,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub wallet_balance: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_position_qty_reduced: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_position_qty_reducible: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_position_margin: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_unrealized_profit: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_expected_pnl: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub free_collateral: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub account_value: f64,
+    pub account_data_by_market: Vec<MarketData>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketData {
+    pub symbol: String,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub position_qty_reduced: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub position_qty_reducible: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub position_margin: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub unrealized_profit: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub expected_pnl: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub selected_leverage: f64,
 }
