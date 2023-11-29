@@ -1,8 +1,7 @@
 use ed25519_dalek::*;
-use rust_decimal::Decimal;
 use serde::Deserialize;
 use serde_json::Value;
-use crate::models::common::deserialize_decimal;
+use crate::models::common::deserialize_to_f64_via_decimal;
 
 #[derive(Deserialize, Debug)]
 pub struct Auth {
@@ -84,22 +83,22 @@ pub struct AccountData {
     pub can_trade: bool,
     pub update_time: u64,
     pub fee_tier: String,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub wallet_balance: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub total_position_qty_reduced: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub total_position_qty_reducible: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub total_position_margin: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub total_unrealized_profit: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub total_expected_pnl: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub free_collateral: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub account_value: Decimal,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub wallet_balance: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_position_qty_reduced: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_position_qty_reducible: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_position_margin: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_unrealized_profit: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub total_expected_pnl: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub free_collateral: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub account_value: f64,
     pub account_data_by_market: Vec<MarketData>,
 }
 
@@ -107,16 +106,16 @@ pub struct AccountData {
 #[serde(rename_all = "camelCase")]
 pub struct MarketData {
     pub symbol: String,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub position_qty_reduced: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub position_qty_reducible: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub position_margin: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub unrealized_profit: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub expected_pnl: Decimal,
-    #[serde(deserialize_with = "deserialize_decimal")]
-    pub selected_leverage: Decimal,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub position_qty_reduced: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub position_qty_reducible: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub position_margin: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub unrealized_profit: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub expected_pnl: f64,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal")]
+    pub selected_leverage: f64,
 }
