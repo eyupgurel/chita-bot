@@ -66,9 +66,12 @@ impl Statistics for Stats {
                 (total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0
             };
             tracing::info!(
-                total_buy_size=total_buy_size,
-                total_sell_size=total_sell_size,
-                buy_percent=buy_percent, "Statistics");
+                market = bluefin_market,
+                total_buy_size = total_buy_size,
+                total_sell_size = total_sell_size,
+                buy_percent = buy_percent,
+                "Statistics"
+            );
             self.tx_stats
                 .send(buy_percent)
                 .expect("Error in sending stats");

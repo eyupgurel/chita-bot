@@ -1,4 +1,9 @@
-use crate::bluefin::{parse_user_position, BluefinClient, UserPosition, AccountData, AccountUpdateEventData};
+use crate::bluefin::{
+    parse_user_position, AccountData, AccountUpdateEventData, BluefinClient, UserPosition,
+};
+use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
+use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
+use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
 use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{Credentials, KuCoinClient};
@@ -11,9 +16,6 @@ use std::str::FromStr;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
-use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
-use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
 
 static BIGNUMBER_BASE: u128 = 1000000000000000000;
 static HEDGE_PERIOD_DURATION: u64 = 1;
@@ -63,7 +65,7 @@ impl HGR {
             bluefin_client,
             kucoin_client,
             bluefin_position,
-            bluefin_account
+            bluefin_account,
         }
     }
 }
@@ -93,11 +95,17 @@ impl Hedger for HGR {
                 tx_bluefin_pos_update, // Sender channel of the appropriate type
                 |msg: &str| -> UserPosition {
                     let v: Value = serde_json::from_str(&msg).unwrap();
-                    let message = parse_user_position(v["data"]["position"].clone());
-                    let quantity = Decimal::from_u128(message.quantity).unwrap() / Decimal::from(BIGNUMBER_BASE);
-                    let avg_entry_price = Decimal::from_u128(message.avg_entry_price).unwrap() / Decimal::from(BIGNUMBER_BASE);
+                    let message: UserPosition = parse_user_position(v["data"]["position"].clone());
+                    let quantity = Decimal::from_u128(message.quantity).unwrap()
+                        / Decimal::from(BIGNUMBER_BASE);
+                    let avg_entry_price = Decimal::from_u128(message.avg_entry_price).unwrap()
+                        / Decimal::from(BIGNUMBER_BASE);
                     let volume = (quantity * avg_entry_price).to_f64().unwrap();
-                    tracing::info!(bluefin_volume=volume, "Bluefin Volume");
+                    tracing::info!(
+                        market = message.symbol,
+                        bluefin_volume = volume,
+                        "Bluefin Volume"
+                    );
                     message
                 },
             );
@@ -114,16 +122,20 @@ impl Hedger for HGR {
                 "AccountDataUpdate",
                 tx_bluefin_account_data_update, // Sender channel of the appropriate type
                 |msg: &str| -> AccountData {
-                    let account_event_update_data: AccountUpdateEventData = serde_json::from_str(&msg).unwrap();
+                    let account_event_update_data: AccountUpdateEventData =
+                        serde_json::from_str(&msg).unwrap();
                     let ad = account_event_update_data.data.account_data;
-                    tracing::info!(wallet_balance = ad.wallet_balance,
-                                   total_position_qty_reduced = ad.total_position_qty_reduced,
-                                    total_position_qty_reducible = ad.total_position_qty_reducible,
-                                    total_position_margin = ad.total_position_margin,
-                                    total_unrealized_profit = ad.total_unrealized_profit,
-                                    total_expected_pnl = ad.total_expected_pnl,
-                                    free_collateral = ad.free_collateral,
-                                    account_value = ad.account_value, "Account Data");
+                    tracing::info!(
+                        wallet_balance = ad.wallet_balance,
+                        total_position_qty_reduced = ad.total_position_qty_reduced,
+                        total_position_qty_reducible = ad.total_position_qty_reducible,
+                        total_position_margin = ad.total_position_margin,
+                        total_unrealized_profit = ad.total_unrealized_profit,
+                        total_expected_pnl = ad.total_expected_pnl,
+                        free_collateral = ad.free_collateral,
+                        account_value = ad.account_value,
+                        "Account Data"
+                    );
                     ad
                 },
             );
@@ -172,10 +184,13 @@ impl Hedger for HGR {
         let is_buy = diff.is_sign_positive();
 
         if order_quantity > Decimal::from(0) {
-            tracing::info!(current_kucoin_qty=current_kucoin_qty.to_f64().unwrap(),
-                            bluefin_quantity=bluefin_quantity.to_f64().unwrap(),
-                            order_quantity=order_quantity.to_f64().unwrap(),
-                            is_buy=is_buy, "Positions Across");
+            tracing::info!(
+                current_kucoin_qty = current_kucoin_qty.to_f64().unwrap(),
+                bluefin_quantity = bluefin_quantity.to_f64().unwrap(),
+                order_quantity = order_quantity.to_f64().unwrap(),
+                is_buy = is_buy,
+                "Positions Across"
+            );
         }
 
         if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() {
