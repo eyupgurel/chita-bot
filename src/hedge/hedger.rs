@@ -78,19 +78,20 @@ impl Hedger for HGR {
     fn connect(&mut self) {
         let vars: EnvVars = env::env_variables();
         let (tx_bluefin_pos_update, _rx_bluefin_pos_update) = mpsc::channel();
+        let (tx_bluefin_order_update, _rx_bluefin_order_update) = mpsc::channel();
         let (tx_bluefin_account_data_update, _rx_bluefin_account_data_update) = mpsc::channel();
 
         let bluefin_market = self.market.symbols.bluefin.to_owned();
         let bluefin_market_for_order_fill = bluefin_market.clone();
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
-        let _handle_bluefin_pos_update = thread::spawn(move || {
+        let _handle_bluefin_order_update = thread::spawn(move || {
             stream_bluefin_private_socket(
                 &bluefin_websocket_url,
                 &bluefin_market_for_order_fill,
                 &bluefin_auth_token,
                 "OrderUpdate",
-                tx_bluefin_pos_update, // Sender channel of the appropriate type
+                tx_bluefin_order_update, // Sender channel of the appropriate type
                 |msg: &str| -> OrderUpdate {
 
                     let v: Value = serde_json::from_str(&msg).unwrap();
@@ -115,6 +116,39 @@ impl Hedger for HGR {
                 },
             );
         });
+
+        let bluefin_market = self.market.symbols.bluefin.to_owned();
+        let bluefin_market_for_order_fill = bluefin_market.clone();
+        let bluefin_auth_token = self.bluefin_client.auth_token.clone();
+        let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
+        let _handle_bluefin_pos_update = thread::spawn(move || {
+            stream_bluefin_private_socket(
+                &bluefin_websocket_url,
+                &bluefin_market_for_order_fill,
+                &bluefin_auth_token,
+                "PositionUpdate",
+                tx_bluefin_pos_update, // Sender channel of the appropriate type
+                |msg: &str| -> UserPosition {
+                    let v: Value = serde_json::from_str(&msg).unwrap();
+                    let user_position: UserPosition = parse_user_position(v["data"]["position"].clone());
+                    let mut quantity = Decimal::from_u128(user_position.quantity).unwrap()
+                        / Decimal::from(BIGNUMBER_BASE);
+
+                    if !user_position.side{
+                        quantity = quantity * Decimal::from_i128(-1).unwrap();
+                    }
+
+                    tracing::info!(
+                        market = user_position.symbol,
+                        bluefin_real_quantity = quantity.to_f64().unwrap(),
+                        "Bluefin Quantity"
+                    );
+                    user_position
+                },
+            );
+        });
+
+
         let bluefin_market = self.market.symbols.bluefin.to_owned();
         let bluefin_market_for_order_fill = bluefin_market.clone();
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
@@ -145,6 +179,7 @@ impl Hedger for HGR {
                 },
             );
         });
+
         thread::sleep(Duration::from_secs(5));
         let dry_run = vars.dry_run;
         self.hedge(dry_run);
@@ -194,6 +229,7 @@ impl Hedger for HGR {
 
         if order_quantity > Decimal::from(0) {
             tracing::info!(
+                market = bluefin_market,
                 current_kucoin_qty = current_kucoin_qty.to_f64().unwrap(),
                 bluefin_quantity = bluefin_quantity.to_f64().unwrap(),
                 order_quantity = order_quantity.to_f64().unwrap(),
