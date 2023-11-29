@@ -1,6 +1,4 @@
-use crate::bluefin::{
-    parse_user_position, AccountData, AccountUpdateEventData, BluefinClient, UserPosition,
-};
+use crate::bluefin::{parse_user_position, AccountData, AccountUpdateEventData, BluefinClient, UserPosition, OrderUpdate, parse_order_update};
 use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
 use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
 use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
@@ -91,22 +89,29 @@ impl Hedger for HGR {
                 &bluefin_websocket_url,
                 &bluefin_market_for_order_fill,
                 &bluefin_auth_token,
-                "PositionUpdate",
+                "OrderUpdate",
                 tx_bluefin_pos_update, // Sender channel of the appropriate type
-                |msg: &str| -> UserPosition {
+                |msg: &str| -> OrderUpdate {
+
                     let v: Value = serde_json::from_str(&msg).unwrap();
-                    let message: UserPosition = parse_user_position(v["data"]["position"].clone());
-                    let quantity = Decimal::from_u128(message.quantity).unwrap()
+                    let order_update: OrderUpdate = parse_order_update(v["data"]["order"].clone());
+
+                    let open_qty = Decimal::from_u128(order_update.open_qty).unwrap()
                         / Decimal::from(BIGNUMBER_BASE);
-                    let avg_entry_price = Decimal::from_u128(message.avg_entry_price).unwrap()
-                        / Decimal::from(BIGNUMBER_BASE);
-                    let volume = (quantity * avg_entry_price).to_f64().unwrap();
-                    tracing::info!(
-                        market = message.symbol,
-                        bluefin_volume = volume,
-                        "Bluefin Volume"
-                    );
-                    message
+
+                    if open_qty.is_zero(){
+                        let quantity = Decimal::from_u128(order_update.quantity).unwrap()
+                            / Decimal::from(BIGNUMBER_BASE);
+                        let avg_fill_price = Decimal::from_u128(order_update.avg_fill_price).unwrap()
+                            / Decimal::from(BIGNUMBER_BASE);
+                        let volume = (quantity * avg_fill_price).to_f64().unwrap();
+                        tracing::info!(
+                            market = order_update.symbol,
+                            bluefin_volume = volume,
+                            "Bluefin Volume"
+                        );
+                    }
+                    order_update
                 },
             );
         });

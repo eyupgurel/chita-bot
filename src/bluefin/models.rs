@@ -43,8 +43,25 @@ pub struct OrderUpdate {
     pub symbol: String,
     pub order_status: String,
     pub cancel_reason: String,
+    pub quantity: u128,
+    pub open_qty: u128,
+    pub avg_fill_price: u128
 }
 
+pub fn parse_order_update(v: Value) -> OrderUpdate {
+    let quantity_str: String = serde_json::from_str(&v["quantity"].to_string()).unwrap();
+    let open_qty_str: String = serde_json::from_str(&v["openQty"].to_string()).unwrap();
+    let avg_fill_price_str: String = serde_json::from_str(&v["avgFillPrice"].to_string()).unwrap();
+    return OrderUpdate {
+        hash: serde_json::from_str(&v["hash"].to_string()).unwrap(),
+        symbol: serde_json::from_str(&v["symbol"].to_string()).unwrap(),
+        order_status: serde_json::from_str(&v["orderStatus"].to_string()).unwrap(),
+        cancel_reason: serde_json::from_str(&v["cancelReason"].to_string()).unwrap(),
+        quantity: quantity_str.parse::<u128>().unwrap(),
+        open_qty: open_qty_str.parse::<u128>().unwrap(),
+        avg_fill_price: avg_fill_price_str.parse::<u128>().unwrap(),
+    };
+}
 pub fn parse_user_position(position: Value) -> UserPosition {
     let ep_str: String = serde_json::from_str(&position["avgEntryPrice"].to_string()).unwrap();
     let quantity_str: String = serde_json::from_str(&position["quantity"].to_string()).unwrap();
