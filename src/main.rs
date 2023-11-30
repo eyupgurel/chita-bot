@@ -20,6 +20,7 @@ use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Config;
 use crate::statistics::stats::{Statistics, Stats};
 use env::EnvVars;
+use crate::statistics::account_stats::{AccountStatistics, AccountStats};
 
 fn main() {
     // Set a custom global panic hook
@@ -75,12 +76,19 @@ fn main() {
         })
         .collect();
 
+    let account_stats_handle = thread::spawn(move || {
+        AccountStats::new().log();
+    });
+
     let mut combined_handles = mm_handles;
     combined_handles.extend(hgr_handles);
     combined_handles.extend(statistic_handles);
+
 
     // Wait for all threads to complete in one pass
     combined_handles.into_iter().for_each(|handle| {
         handle.join().expect("Thread failed to join main");
     });
+
+    account_stats_handle.join().expect("Thread failed to join main");
 }

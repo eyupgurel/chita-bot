@@ -19,6 +19,7 @@ pub mod client {
     type HmacSha256 = Hmac<Sha256>;
 
     use crate::kucoin::models::{Error, FillsResponse, Method, RecentFillsResponse, Response, TransactionHistory};
+    use crate::models::kucoin_models::{PositionList};
 
     #[derive(Debug, Clone)]
     pub struct Credentials {
@@ -261,6 +262,27 @@ pub mod client {
             transaction_history
 
         }
+
+        pub fn get_position_list(&self) -> PositionList{
+            let endpoint = String::from("/api/v1/positions");
+            let url: String = format!("{}{}", &self.api_gateway, endpoint);
+
+            let headers: HeaderMap =
+                self.sign_headers(endpoint.clone(), None, None, Method::GET);
+
+            let res: String = self
+                .client
+                .get(url)
+                .headers(headers)
+                .send()
+                .unwrap()
+                .text()
+                .unwrap();
+
+            let position_list: PositionList  = serde_json::from_str(&res).expect("Can't parse");
+            position_list
+        }
+
         pub fn get_position(&self, market: &str) -> Option<UserPosition> {
             let endpoint = String::from("/api/v1/position");
             let market_symbol = self.markets.get(market).unwrap();

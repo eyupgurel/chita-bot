@@ -82,3 +82,55 @@ pub struct TickerV2 {
     pub sn: u64,
     pub data: TickerData,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Position {
+    pub id: String,
+    pub symbol: String,
+    pub auto_deposit: bool,
+    pub maint_margin_req: f64,
+    pub risk_limit: i64,
+    pub real_leverage: f64,
+    pub cross_mode: bool,
+    pub delev_percentage: f64,
+    pub opening_timestamp: i64,
+    pub current_timestamp: i64,
+    pub current_qty: i64,
+    pub current_cost: f64,
+    pub current_comm: f64,
+    pub unrealised_cost: f64,
+    pub realised_gross_cost: f64,
+    pub realised_cost: f64,
+    pub is_open: bool,
+    pub mark_price: f64,
+    pub mark_value: f64,
+    pub pos_cost: f64,
+    pub pos_cross: f64,
+    pub pos_cross_margin: f64,
+    pub pos_init: f64,
+    pub pos_comm: f64,
+    pub pos_comm_common: f64,
+    pub pos_loss: f64,
+    pub pos_margin: f64,
+    pub pos_maint: f64,
+    pub maint_margin: f64,
+    pub realised_gross_pnl: f64,
+    pub realised_pnl: f64,
+    pub unrealised_pnl: f64,
+    pub unrealised_pnl_pcnt: f64,
+    pub unrealised_roe_pcnt: f64,
+    pub avg_entry_price: f64,
+    pub liquidation_price: f64,
+    pub bankrupt_price: f64,
+    pub settle_currency: String,
+    pub is_inverse: bool,
+    pub maintain_margin: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionList {
+    pub code: String,
+    pub data: Vec<Position>,
+}
