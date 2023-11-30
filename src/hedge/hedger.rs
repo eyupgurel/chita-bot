@@ -1,7 +1,4 @@
 use crate::bluefin::{parse_user_position, AccountData, AccountUpdateEventData, BluefinClient, UserPosition, OrderUpdate, parse_order_update};
-use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
-use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
-use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
 use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{Credentials, KuCoinClient};
@@ -79,8 +76,6 @@ impl Hedger for HGR {
         let vars: EnvVars = env::env_variables();
         let (tx_bluefin_pos_update, _rx_bluefin_pos_update) = mpsc::channel();
         let (tx_bluefin_order_update, _rx_bluefin_order_update) = mpsc::channel();
-        let (tx_bluefin_account_data_update, _rx_bluefin_account_data_update) = mpsc::channel();
-
         let bluefin_market = self.market.symbols.bluefin.to_owned();
         let bluefin_market_for_order_fill = bluefin_market.clone();
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
@@ -131,51 +126,20 @@ impl Hedger for HGR {
                 |msg: &str| -> UserPosition {
                     let v: Value = serde_json::from_str(&msg).unwrap();
                     let user_position: UserPosition = parse_user_position(v["data"]["position"].clone());
-                    let mut quantity = Decimal::from_u128(user_position.quantity).unwrap()
-                        / Decimal::from(BIGNUMBER_BASE);
+                    if user_position.symbol == bluefin_market {
+                        let mut quantity = Decimal::from_u128(user_position.quantity).unwrap()
+                            / Decimal::from(BIGNUMBER_BASE);
 
-                    if !user_position.side{
-                        quantity = quantity * Decimal::from_i128(-1).unwrap();
-                    }
+                        if !user_position.side{
+                            quantity = quantity * Decimal::from_i128(-1).unwrap();
+                        }
 
-                    tracing::info!(
+                        tracing::info!(
                         market = user_position.symbol,
                         bluefin_real_quantity = quantity.to_f64().unwrap(),
-                        "Bluefin Quantity"
-                    );
+                        "Bluefin Quantity");
+                    }
                     user_position
-                },
-            );
-        });
-
-
-        let bluefin_market = self.market.symbols.bluefin.to_owned();
-        let bluefin_market_for_order_fill = bluefin_market.clone();
-        let bluefin_auth_token = self.bluefin_client.auth_token.clone();
-        let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
-        let _handle_bluefin_account_data_update = thread::spawn(move || {
-            stream_bluefin_private_socket(
-                &bluefin_websocket_url,
-                &bluefin_market_for_order_fill,
-                &bluefin_auth_token,
-                "AccountDataUpdate",
-                tx_bluefin_account_data_update, // Sender channel of the appropriate type
-                |msg: &str| -> AccountData {
-                    let account_event_update_data: AccountUpdateEventData =
-                        serde_json::from_str(&msg).unwrap();
-                    let ad = account_event_update_data.data.account_data;
-                    tracing::info!(
-                        wallet_balance = ad.wallet_balance,
-                        total_position_qty_reduced = ad.total_position_qty_reduced,
-                        total_position_qty_reducible = ad.total_position_qty_reducible,
-                        total_position_margin = ad.total_position_margin,
-                        total_unrealized_profit = ad.total_unrealized_profit,
-                        total_expected_pnl = ad.total_expected_pnl,
-                        free_collateral = ad.free_collateral,
-                        account_value = ad.account_value,
-                        "Bluefin Account Data"
-                    );
-                    ad
                 },
             );
         });
