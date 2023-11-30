@@ -18,7 +18,7 @@ pub mod client {
     #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
 
-    use crate::kucoin::models::{Error, FillsResponse, Method, RecentFillsResponse, Response};
+    use crate::kucoin::models::{Error, FillsResponse, Method, RecentFillsResponse, Response, TransactionHistory};
 
     #[derive(Debug, Clone)]
     pub struct Credentials {
@@ -239,6 +239,27 @@ pub mod client {
                 .iter()
                 .fold(0, |acc, trade| acc + trade.size);
             total_size
+        }
+
+        pub fn get_transaction_history(&self) -> TransactionHistory{
+            let endpoint = String::from("/api/v1/transaction-history");
+            let url: String = format!("{}{}", &self.api_gateway, endpoint);
+
+            let headers: HeaderMap =
+                self.sign_headers(endpoint.clone(), None, None, Method::GET);
+
+            let res: String = self
+                .client
+                .get(url)
+                .headers(headers)
+                .send()
+                .unwrap()
+                .text()
+                .unwrap();
+
+            let transaction_history: TransactionHistory  = serde_json::from_str(&res).expect("Can't parse");
+            transaction_history
+
         }
         pub fn get_position(&self, market: &str) -> Option<UserPosition> {
             let endpoint = String::from("/api/v1/position");

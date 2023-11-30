@@ -218,6 +218,35 @@ pub struct Trade {
     pub close_fee_pay: Option<String>,
     pub trade_time: u64,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Transaction {
+    pub time: i64,
+    #[serde(rename = "type")]
+    pub transaction_type: String,
+    pub amount: f64,
+    pub fee: f64,
+    pub account_equity: f64,
+    pub status: String,
+    pub remark: String,
+    pub offset: i64,
+    pub currency: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionData {
+    pub data_list: Vec<Transaction>,
+    pub has_more: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TransactionHistory {
+    pub code: String,
+    pub data: TransactionData,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::kucoin::models::PositionChangeMessage;
