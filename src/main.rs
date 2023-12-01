@@ -77,7 +77,7 @@ fn main() {
         .collect();
 
     let account_stats_handle = thread::spawn(move || {
-        AccountStats::new().log();
+        AccountStats::new(config).log();
     });
 
     let mut combined_handles = mm_handles;

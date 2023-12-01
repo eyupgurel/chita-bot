@@ -5,6 +5,7 @@ use crate::bluefin::{AccountData, AccountUpdateEventData, BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{Credentials, KuCoinClient, TransactionHistory};
+use crate::models::common::Config;
 use crate::models::kucoin_models::PositionList;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 
@@ -13,14 +14,16 @@ pub trait AccountStatistics {
     fn log(&mut self);
     fn process_transaction_history(transaction_history: &TransactionHistory) -> f64;
     fn sum_unrealised_pnl(position_list: &PositionList) -> f64;
+    fn get_bluefin_symbol(config: &Config, kucoin_symbol: &str) -> Option<String>;
 }
 pub struct AccountStats {
     bluefin_client: BluefinClient,
     kucoin_client: KuCoinClient,
+    config: Config,
 }
 
 impl AccountStats {
-    pub fn new() -> AccountStats {
+    pub fn new(config: Config) -> AccountStats {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -45,7 +48,8 @@ impl AccountStats {
 
         AccountStats {
             bluefin_client,
-            kucoin_client
+            kucoin_client,
+            config
         }
     }
 }
@@ -92,6 +96,20 @@ impl AccountStatistics for AccountStats{
 
             let total_unrealised_pnl = <AccountStats as AccountStatistics>::sum_unrealised_pnl(&position_list);
 
+
+            position_list.data.iter()
+                .for_each(|position| {
+                    let bluefin_market =  <AccountStats as AccountStatistics>::get_bluefin_symbol(&self.config, &position.symbol);
+                    match bluefin_market{
+                        Some(value) => tracing::info!(current_qty=position.current_qty,
+                                                            pos_margin=position.pos_margin,
+                                                             unrealised_pnl= position.unrealised_pnl,
+                                                            "Kucoin Market Data"),
+                        _ => {}
+                    }
+
+                });
+
             tracing::info!(total_account_balance=total_account_balance,
                            total_unrealised_pnl=total_unrealised_pnl,
                            "Kucoin Account Data");
@@ -125,6 +143,15 @@ impl AccountStatistics for AccountStats{
             .iter()
             .map(|position| position.unrealised_pnl)
             .sum()
+    }
+
+    fn get_bluefin_symbol(config: &Config, kucoin_symbol: &str) -> Option<String> {
+        for market in &config.markets {
+            if market.symbols.kucoin == kucoin_symbol {
+                return Some(market.symbols.bluefin.clone());
+            }
+        }
+        None
     }
 
 }
