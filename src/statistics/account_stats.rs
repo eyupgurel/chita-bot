@@ -101,7 +101,9 @@ impl AccountStatistics for AccountStats{
                 .for_each(|position| {
                     let bluefin_market =  <AccountStats as AccountStatistics>::get_bluefin_symbol(&self.config, &position.symbol);
                     match bluefin_market{
-                        Some(value) => tracing::info!(current_qty=position.current_qty,
+                        Some(value) => tracing::info!(
+                                                            market = value,
+                                                            current_qty=position.current_qty,
                                                             pos_margin=position.pos_margin,
                                                              unrealised_pnl= position.unrealised_pnl,
                                                             "Kucoin Market Data"),
