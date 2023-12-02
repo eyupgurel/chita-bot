@@ -365,6 +365,7 @@ impl MarketMaker for MM {
             match self.rx_account_data.try_recv() {
                 Ok(value) => {
                     decarbonization =  value.free_collateral / value.account_value < 0.10;
+                    tracing::info!(decarbonization = decarbonization, "Decarbonization");
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet

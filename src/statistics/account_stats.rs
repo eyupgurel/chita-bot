@@ -146,7 +146,7 @@ impl AccountStatistics for AccountStats{
 
             match rx_bluefin_account_data_update.try_recv() {
                 Ok(value) => {
-                    tracing::debug!("AccountData: {:?}", value);
+                    tracing::info!("AccountData: {:?}", value);
                     let _ = self.v_tx_account_data.iter()
                         .try_for_each(|sender| {
                             let clone = value.clone();
