@@ -93,7 +93,7 @@ pub struct AccountUpdateData {
     pub account_data: AccountData,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountData {
     pub address: String,
@@ -119,7 +119,7 @@ pub struct AccountData {
     pub account_data_by_market: Vec<MarketData>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketData {
     pub symbol: String,

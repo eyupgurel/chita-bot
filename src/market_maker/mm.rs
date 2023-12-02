@@ -1,4 +1,4 @@
-use crate::bluefin::BluefinClient;
+use crate::bluefin::{AccountData, BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
 use crate::models::binance_models::DepthUpdate;
@@ -36,10 +36,11 @@ pub struct MM {
     kucoin_bid_order_response: CallResponse,
     last_mm_instant: Instant,
     rx_stats: Receiver<f64>,
+    rx_account_data: Receiver<AccountData>,
 }
 
 impl MM {
-    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> (MM, Sender<f64>) {
+    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> (MM, Sender<f64>, Sender<AccountData>) {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -66,6 +67,7 @@ impl MM {
         kucoin_client.cancel_all_orders(Some(&bluefin_market));
 
         let (tx_stats, rx_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
+        let (tx_account_data, rx_account_data): (Sender<AccountData>, Receiver<AccountData>) = mpsc::channel();
 
         (
             MM {
@@ -83,8 +85,10 @@ impl MM {
                 },
                 last_mm_instant: Instant::now(),
                 rx_stats,
+                rx_account_data
             },
             tx_stats,
+            tx_account_data
         )
     }
 
@@ -110,6 +114,7 @@ pub trait MarketMaker {
         tkr_book: &OrderBook,
         buy_percent: f64,
         shift: f64,
+        decarbonization:bool
     );
 
     fn calculate_skew_multiplier(skewing_coefficient: f64, percent: f64) -> f64;
@@ -205,6 +210,7 @@ impl MarketMaker for MM {
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
         let mut buy_percent: f64 = 50.0;
+        let mut decarbonization = false;
 
         // ---- Circuit Breakers ---- //
 
@@ -247,7 +253,7 @@ impl MarketMaker for MM {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, tkr_ob, buy_percent, 0.0);
+                        self.market_make(ref_ob, mm_ob, tkr_ob, buy_percent, 0.0, decarbonization);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -285,7 +291,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(&value, mm_ob, tkr_ob, buy_percent, 0.0);
+                        self.market_make(&value, mm_ob, tkr_ob, buy_percent, 0.0, decarbonization);
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -325,7 +331,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, &value, buy_percent, 0.0);
+                        self.market_make(ref_ob, mm_ob, &value, buy_percent, 0.0, decarbonization);
                     }
                     ob_map.insert("bluefin".to_string(), value);
                 }
@@ -356,6 +362,19 @@ impl MarketMaker for MM {
                     }
                 }
             }
+            match self.rx_account_data.try_recv() {
+                Ok(value) => {
+                    decarbonization =  value.free_collateral / value.account_value < 0.10;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from kucoin yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::debug!("account data worker has disconnected!");
+                }
+            }
+
+
             self.debug_ob_map(&ob_map);
         }
     }
@@ -367,6 +386,7 @@ impl MarketMaker for MM {
         tkr_book: &OrderBook,
         buy_percent: f64,
         shift: f64,
+        decarbonization:bool
     ) {
         let vars: EnvVars = env::env_variables();
         if self.last_mm_instant.elapsed()
@@ -407,7 +427,21 @@ impl MarketMaker for MM {
             tracing::debug!("tkr_ob: {:?}", &tkr_book);
             tracing::debug!("market making orders: {:?}", &mm);
 
-            self.place_maker_orders(&mm);
+
+            let mut mm_asks = mm.0;
+            let mut mm_bids = mm.1;
+
+            if decarbonization && buy_percent < 50.0
+            {
+                mm_asks = (Vec::new(), Vec::new());
+            }
+
+            if decarbonization && buy_percent > 50.0
+            {
+                mm_bids = (Vec::new(), Vec::new());
+            }
+
+            self.place_maker_orders(&(mm_asks, mm_bids));
             self.last_mm_instant = Instant::now();
         }
     }
@@ -529,34 +563,42 @@ impl MarketMaker for MM {
         let can_place_order = res.error.is_none();
         let vars: EnvVars = env::env_variables();
         let dry_run = vars.dry_run;
+        // Check if the first and second elements are empty
+        let are_aks_empty = mm.0.0.is_empty() && mm.0.1.is_empty();
+        let are_bids_empty = mm.1.0.is_empty() && mm.1.1.is_empty();
+
 
         if can_place_order && !dry_run {
             let bluefin_market = self.market.symbols.bluefin.to_owned();
 
-            if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
-                tracing::debug!("top ask to be posted as limit on Kucoin:{:?}", top_ask);
+            if !are_aks_empty {
+                if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
+                    tracing::debug!("top ask to be posted as limit on Kucoin:{:?}", top_ask);
 
-                let price = round_to_precision(top_ask.0, self.market.price_precision);
-                let quantity = top_ask.1;
+                    let price = round_to_precision(top_ask.0, self.market.price_precision);
+                    let quantity = top_ask.1;
 
-                tracing::debug!("price: {} quantity: {}", price, quantity);
-                let ask_order_response =
-                    self.kucoin_client
-                        .place_limit_order(&bluefin_market, false, price, quantity);
-                self.kucoin_ask_order_response = ask_order_response;
+                    tracing::debug!("price: {} quantity: {}", price, quantity);
+                    let ask_order_response =
+                        self.kucoin_client
+                            .place_limit_order(&bluefin_market, false, price, quantity);
+                    self.kucoin_ask_order_response = ask_order_response;
+                }
             }
-            if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
-                tracing::debug!("top bid to be posted as limit on Kucoin:{:?}", top_bid);
+            if !are_bids_empty {
+                if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
+                    tracing::debug!("top bid to be posted as limit on Kucoin:{:?}", top_bid);
 
-                let price = round_to_precision(top_bid.0, self.market.price_precision);
-                let quantity = top_bid.1;
+                    let price = round_to_precision(top_bid.0, self.market.price_precision);
+                    let quantity = top_bid.1;
 
-                tracing::debug!("price: {} quantity: {}", price, quantity);
+                    tracing::debug!("price: {} quantity: {}", price, quantity);
 
-                let bid_order_response =
-                    self.kucoin_client
-                        .place_limit_order(&bluefin_market, true, price, quantity);
-                self.kucoin_bid_order_response = bid_order_response;
+                    let bid_order_response =
+                        self.kucoin_client
+                            .place_limit_order(&bluefin_market, true, price, quantity);
+                    self.kucoin_bid_order_response = bid_order_response;
+                }
             }
         }
     }

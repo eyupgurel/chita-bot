@@ -1,5 +1,7 @@
 use std::thread::JoinHandle;
 use std::{fs, panic, process, thread};
+use std::sync::mpsc::Sender;
+
 
 mod bluefin;
 mod env;
@@ -20,6 +22,7 @@ use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Config;
 use crate::statistics::stats::{Statistics, Stats};
 use env::EnvVars;
+use crate::bluefin::AccountData;
 use crate::statistics::account_stats::{AccountStatistics, AccountStats};
 
 fn main() {
@@ -43,13 +46,14 @@ fn main() {
         fs::read_to_string("src/config/config.json").expect("Unable to read config.json");
     let config: Config = serde_json::from_str(&config_str).expect("JSON was not well-formatted");
 
+    let mut v_tx_account_data: Vec<Sender<AccountData>> = Vec::new();
     // Create and collect thread handles using an iterator
     let (mm_handles, statistic_handles): (Vec<JoinHandle<()>>, Vec<JoinHandle<()>>) = config
         .markets
         .clone()
         .into_iter()
         .map(|market| {
-            let (mut mm, tx_stats) = MM::new(market.clone(), config.circuit_breaker_config.clone()); // get MM instance and tx_stats
+            let (mut mm, tx_stats,tx_account_data) = MM::new(market.clone(), config.circuit_breaker_config.clone()); // get MM instance and tx_stats
 
             // Spawn one thread for MM
             let mm_handle = thread::spawn(move || {
@@ -60,6 +64,8 @@ fn main() {
             let stats_handle = thread::spawn(move || {
                 Stats::new(market, tx_stats).emit();
             });
+
+            v_tx_account_data.push(tx_account_data);
 
             (mm_handle, stats_handle)
         })
@@ -77,7 +83,7 @@ fn main() {
         .collect();
 
     let account_stats_handle = thread::spawn(move || {
-        AccountStats::new(config).log();
+        AccountStats::new(config, v_tx_account_data).log();
     });
 
     let mut combined_handles = mm_handles;

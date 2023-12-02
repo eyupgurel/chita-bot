@@ -247,6 +247,26 @@ pub struct TransactionHistory {
     pub data: TransactionData,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AvailableBalance {
+    // Note: The 'userId' field is deprecated and will be deleted later.
+    #[serde(skip_deserializing)]
+    pub user_id: Option<String>,
+    pub topic: String,
+    pub subject: String,
+    pub data: BalanceData,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceData {
+    pub available_balance: i32,
+    pub hold_balance: i32,
+    pub currency: String,
+    pub timestamp: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::kucoin::models::PositionChangeMessage;
