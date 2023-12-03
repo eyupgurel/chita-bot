@@ -1,13 +1,15 @@
 use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
 use crate::bluefin::{AccountData, AccountUpdateEventData, BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
-use crate::kucoin::{Credentials, KuCoinClient, TransactionHistory};
+use crate::kucoin::{AvailableBalance, Credentials, KuCoinClient, TransactionHistory};
 use crate::models::common::Config;
 use crate::models::kucoin_models::PositionList;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
+use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
 
 static ACCOUNT_STATS_PERIOD_DURATION: u64 = 60;
 pub trait AccountStatistics {
@@ -20,10 +22,11 @@ pub struct AccountStats {
     bluefin_client: BluefinClient,
     kucoin_client: KuCoinClient,
     config: Config,
+    v_tx_account_data: Vec<Sender<AccountData>>,
 }
 
 impl AccountStats {
-    pub fn new(config: Config) -> AccountStats {
+    pub fn new(config: Config, v_tx_account_data: Vec<Sender<AccountData>>) -> AccountStats {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -49,7 +52,8 @@ impl AccountStats {
         AccountStats {
             bluefin_client,
             kucoin_client,
-            config
+            config,
+            v_tx_account_data
         }
     }
 }
@@ -57,7 +61,8 @@ impl AccountStats {
 impl AccountStatistics for AccountStats{
     fn log(&mut self) {
         let vars: EnvVars = env::env_variables();
-        let (tx_bluefin_account_data_update, _rx_bluefin_account_data_update) = mpsc::channel();
+        let (tx_bluefin_account_data_update, rx_bluefin_account_data_update) = mpsc::channel();
+        let (tx_kucoin_available_balance, _rx_kucoin_available_balance) = mpsc::channel();
 
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
@@ -88,6 +93,30 @@ impl AccountStatistics for AccountStats{
             );
         });
 
+
+        let topic = format!("/contractAccount/wallet");
+        let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
+
+
+        let _handle_kucoin_of = thread::spawn(move || {
+            stream_kucoin_socket(
+                &kucoin_private_socket_url,
+                &"",
+                &topic,
+                tx_kucoin_available_balance, // Sender channel of the appropriate type
+                |msg: &str| -> AvailableBalance {
+                    let available_balance: AvailableBalance =
+                        serde_json::from_str(&msg).expect("Can't parse");
+                    tracing::info!(available_balance=available_balance.data.available_balance,
+                                   hold_balance=available_balance.data.hold_balance,
+                                   "Kucoin Account Balance");
+                    available_balance
+                },
+                &"availableBalance.change",
+                true
+            );
+        });
+
         loop {
             let tx_history = self.kucoin_client.get_transaction_history();
             let total_account_balance = <AccountStats as AccountStatistics>::process_transaction_history(&tx_history);
@@ -101,8 +130,7 @@ impl AccountStatistics for AccountStats{
                 .for_each(|position| {
                     let bluefin_market =  <AccountStats as AccountStatistics>::get_bluefin_symbol(&self.config, &position.symbol);
                     match bluefin_market{
-                        Some(value) => tracing::info!(
-                                                            market = value,
+                        Some(value) => tracing::info!(market = value,
                                                             current_qty=position.current_qty,
                                                             pos_margin=position.pos_margin,
                                                              unrealised_pnl= position.unrealised_pnl,
@@ -115,6 +143,23 @@ impl AccountStatistics for AccountStats{
             tracing::info!(total_account_balance=total_account_balance,
                            total_unrealised_pnl=total_unrealised_pnl,
                            "Kucoin Account Data");
+
+            match rx_bluefin_account_data_update.try_recv() {
+                Ok(value) => {
+                    tracing::info!("AccountData: {:?}", value);
+                    let _ = self.v_tx_account_data.iter()
+                        .try_for_each(|sender| {
+                            let clone = value.clone();
+                            sender.send(clone)
+                        });
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from binance yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::debug!("AccountData socket has disconnected!");
+                }
+            };
 
             thread::sleep(Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION));
         }
