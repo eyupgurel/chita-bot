@@ -9,6 +9,7 @@ use rust_decimal::Decimal;
 use serde_json::Value;
 use std::str::FromStr;
 use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
 
@@ -23,10 +24,11 @@ pub struct HGR {
     #[allow(dead_code)]
     bluefin_account: AccountData,
     bluefin_position: UserPosition,
+    tx_hedger: Sender<f64>,
 }
 
 impl HGR {
-    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> HGR {
+    pub fn new(market: Market, cb_config: CircuitBreakerConfig, tx_hedger: Sender<f64>) -> HGR {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -61,6 +63,7 @@ impl HGR {
             kucoin_client,
             bluefin_position,
             bluefin_account,
+            tx_hedger,
         }
     }
 }
@@ -175,6 +178,8 @@ impl Hedger for HGR {
         let kucoin_quantity = Decimal::from(kucoin_position.quantity);
 
         let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
+
+        self.tx_hedger.send(current_kucoin_qty.to_f64().unwrap()).expect("Could not send current_kucoin_qty through!");
 
         let target_quantity = current_kucoin_qty * Decimal::from(-1);
 

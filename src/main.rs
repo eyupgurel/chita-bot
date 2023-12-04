@@ -47,48 +47,45 @@ fn main() {
     let config: Config = serde_json::from_str(&config_str).expect("JSON was not well-formatted");
 
     let mut v_tx_account_data: Vec<Sender<AccountData>> = Vec::new();
-    // Create and collect thread handles using an iterator
-    let (mm_handles, statistic_handles): (Vec<JoinHandle<()>>, Vec<JoinHandle<()>>) = config
-        .markets
-        .clone()
-        .into_iter()
-        .map(|market| {
-            let (mut mm, tx_stats,tx_account_data) = MM::new(market.clone(), config.circuit_breaker_config.clone()); // get MM instance and tx_stats
+    let mut mm_handles: Vec<JoinHandle<()>> = Vec::new();
+    let mut statistic_handles: Vec<JoinHandle<()>> = Vec::new();
+    let mut hgr_handles: Vec<JoinHandle<()>> = Vec::new();
 
-            // Spawn one thread for MM
-            let mm_handle = thread::spawn(move || {
-                mm.connect();
-            });
+    for market in config.markets.clone() {
+        let (mut mm, tx_stats, tx_account_data, tx_hedger) = MM::new(market.clone(), config.circuit_breaker_config.clone());
 
-            // Spawn another thread for Stats, passing tx_stats
-            let stats_handle = thread::spawn(move || {
-                Stats::new(market, tx_stats).emit();
-            });
+        let mm_handle = thread::spawn(move || {
+            mm.connect();
+        });
 
-            v_tx_account_data.push(tx_account_data);
+        let market_clone_for_stats = market.clone(); // Clone market for the stats thread
 
-            (mm_handle, stats_handle)
-        })
-        .unzip();
+        let stats_handle = thread::spawn(move || {
+            Stats::new(market_clone_for_stats.clone(), tx_stats).emit();
+        });
 
-    let hgr_handles: Vec<JoinHandle<()>> = config
-        .markets
-        .clone()
-        .into_iter()
-        .map(|market| {
-            thread::spawn(move || {
-                HGR::new(market, config.circuit_breaker_config.clone()).connect();
-            })
-        })
-        .collect();
+        v_tx_account_data.push(tx_account_data);
+
+        let market_clone_for_hgr = market.clone(); // Clone market again for the hedger thread
+
+        let hgr_handle = thread::spawn(move || {
+            HGR::new(market_clone_for_hgr.clone(), config.circuit_breaker_config.clone(), tx_hedger).connect();
+        });
+
+        mm_handles.push(mm_handle);
+        statistic_handles.push(stats_handle);
+        hgr_handles.push(hgr_handle);
+    }
+
+
 
     let account_stats_handle = thread::spawn(move || {
         AccountStats::new(config, v_tx_account_data).log();
     });
 
     let mut combined_handles = mm_handles;
-    combined_handles.extend(hgr_handles);
     combined_handles.extend(statistic_handles);
+    combined_handles.extend(hgr_handles);
 
 
     // Wait for all threads to complete in one pass

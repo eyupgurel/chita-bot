@@ -37,10 +37,11 @@ pub struct MM {
     last_mm_instant: Instant,
     rx_stats: Receiver<f64>,
     rx_account_data: Receiver<AccountData>,
+    rx_hedger_stats: Receiver<f64>,
 }
 
 impl MM {
-    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> (MM, Sender<f64>, Sender<AccountData>) {
+    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> (MM, Sender<f64>, Sender<AccountData>, Sender<f64>) {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -68,6 +69,7 @@ impl MM {
 
         let (tx_stats, rx_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
         let (tx_account_data, rx_account_data): (Sender<AccountData>, Receiver<AccountData>) = mpsc::channel();
+        let (tx_hedger_stats, rx_hedger_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
 
         (
             MM {
@@ -85,10 +87,12 @@ impl MM {
                 },
                 last_mm_instant: Instant::now(),
                 rx_stats,
-                rx_account_data
+                rx_account_data,
+                rx_hedger_stats,
             },
             tx_stats,
-            tx_account_data
+            tx_account_data,
+            tx_hedger_stats
         )
     }
 
@@ -113,7 +117,8 @@ pub trait MarketMaker {
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
         buy_percent: f64,
-        shift: f64
+        shift: f64,
+        kucoin_quantity:f64,
     );
 
     fn create_mm_pair(
@@ -122,6 +127,7 @@ pub trait MarketMaker {
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
         shift: f64,
+        kucoin_quantity: f64
     ) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>));
     fn extract_top_price_and_size(
         &self,
@@ -206,7 +212,8 @@ impl MarketMaker for MM {
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
         let mut buy_percent: f64 = 50.0;
-        let mut decarbonization = false;
+        let mut kucoin_quantity: f64 = 0.0;
+
 
         // ---- Circuit Breakers ---- //
 
@@ -249,7 +256,7 @@ impl MarketMaker for MM {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, tkr_ob, buy_percent, 0.0);
+                        self.market_make(ref_ob, mm_ob, tkr_ob, buy_percent, 0.0, kucoin_quantity);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -287,7 +294,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(&value, mm_ob, tkr_ob, buy_percent, 0.0);
+                        self.market_make(&value, mm_ob, tkr_ob, buy_percent, 0.0, kucoin_quantity);
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -327,7 +334,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, &value, buy_percent, 0.0);
+                        self.market_make(ref_ob, mm_ob, &value, buy_percent, 0.0, kucoin_quantity);
                     }
                     ob_map.insert("bluefin".to_string(), value);
                 }
@@ -360,8 +367,7 @@ impl MarketMaker for MM {
             }
             match self.rx_account_data.try_recv() {
                 Ok(value) => {
-                    decarbonization =  value.free_collateral / value.account_value < 0.10;
-                    tracing::info!(decarbonization = decarbonization, "Decarbonization");
+
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -370,6 +376,19 @@ impl MarketMaker for MM {
                     tracing::debug!("account data worker has disconnected!");
                 }
             }
+            match self.rx_hedger_stats.try_recv() {
+                Ok(value) => {
+                    tracing::debug!("kucoin quantity: {:?}", value);
+                    kucoin_quantity = value;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from kucoin yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::debug!("hedger worker has disconnected!");
+                }
+            }
+
 
 
             self.debug_ob_map(&ob_map);
@@ -382,7 +401,8 @@ impl MarketMaker for MM {
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
         buy_percent: f64,
-        shift: f64
+        shift: f64,
+        kucoin_quantity:f64,
     ) {
         let vars: EnvVars = env::env_variables();
         if self.last_mm_instant.elapsed()
@@ -393,6 +413,7 @@ impl MarketMaker for MM {
                 mm_book,
                 tkr_book,
                 shift,
+                kucoin_quantity,
             );
 
             tracing::debug!("ref ob: {:?}", &ref_book);
@@ -425,6 +446,7 @@ impl MarketMaker for MM {
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
         shift: f64,
+        kucoin_quantity: f64
     ) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)) {
         let ref_mid_price = ref_book.calculate_mid_prices();
         let mm_mid_price = mm_book.calculate_mid_prices();
@@ -432,9 +454,20 @@ impl MarketMaker for MM {
         let half_spread = divide(&spread, 2.0);
         tracing::debug!("half_spread: {:?}", half_spread);
 
-        let mm_bid_prices = subtract(&mm_mid_price, &half_spread);
 
-        let mm_ask_prices = add(&mm_mid_price, &half_spread);
+        let mut mm_bid_prices = subtract(&mm_mid_price, &half_spread);
+
+        if kucoin_quantity > 0.0
+        {
+            mm_bid_prices = subtract(&mm_mid_price, &half_spread);
+        }
+
+        let mut mm_ask_prices = add(&mm_mid_price, &half_spread);
+
+        if kucoin_quantity < 0.0
+        {
+            mm_ask_prices = add(&mm_mid_price, &half_spread);
+        }
 
         let mm_bid_sizes = tkr_book.bid_shift(shift);
         let mm_ask_sizes = tkr_book.ask_shift(shift);
@@ -484,14 +517,14 @@ impl MarketMaker for MM {
         let vars: EnvVars = env::env_variables();
         let dry_run = vars.dry_run;
         // Check if the first and second elements are empty
-        let are_aks_empty = mm.0.0.is_empty() && mm.0.1.is_empty();
+        let are_asks_empty = mm.0.0.is_empty() && mm.0.1.is_empty();
         let are_bids_empty = mm.1.0.is_empty() && mm.1.1.is_empty();
 
 
         if can_place_order && !dry_run {
             let bluefin_market = self.market.symbols.bluefin.to_owned();
 
-            if !are_aks_empty {
+            if !are_asks_empty {
                 if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
                     tracing::debug!("top ask to be posted as limit on Kucoin:{:?}", top_ask);
 
