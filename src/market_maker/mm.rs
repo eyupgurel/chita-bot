@@ -113,8 +113,7 @@ pub trait MarketMaker {
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
         buy_percent: f64,
-        shift: f64,
-        decarbonization:bool
+        shift: f64
     );
 
     fn calculate_skew_multiplier(skewing_coefficient: f64, percent: f64) -> f64;
@@ -123,8 +122,6 @@ pub trait MarketMaker {
         ref_book: &OrderBook,
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
-        bid_skew_scale: f64,
-        ask_skew_scale: f64,
         shift: f64,
     ) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>));
     fn extract_top_price_and_size(
@@ -253,7 +250,7 @@ impl MarketMaker for MM {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, tkr_ob, buy_percent, 0.0, decarbonization);
+                        self.market_make(ref_ob, mm_ob, tkr_ob, buy_percent, 0.0);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -291,7 +288,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(&value, mm_ob, tkr_ob, buy_percent, 0.0, decarbonization);
+                        self.market_make(&value, mm_ob, tkr_ob, buy_percent, 0.0);
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -331,7 +328,7 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, &value, buy_percent, 0.0, decarbonization);
+                        self.market_make(ref_ob, mm_ob, &value, buy_percent, 0.0);
                     }
                     ob_map.insert("bluefin".to_string(), value);
                 }
@@ -386,40 +383,16 @@ impl MarketMaker for MM {
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
         buy_percent: f64,
-        shift: f64,
-        decarbonization:bool
+        shift: f64
     ) {
         let vars: EnvVars = env::env_variables();
         if self.last_mm_instant.elapsed()
             >= Duration::from_millis(vars.market_making_time_throttle_period)
         {
-            let sell_percent = 100.0 - buy_percent;
-            // bid making will be skewed if and only if sell_percent is less than 50% otherwise business as usual.
-            // Skewing is only for discouragement not encouragement.
-            let bid_skew_scale = if sell_percent < 50.0 {
-                MM::calculate_skew_multiplier(self.market.skewing_coefficient, sell_percent)
-            } else {
-                1.0
-            };
-            // same as bid skewing.
-            let ask_skew_scale = if buy_percent < 50.0 {
-                MM::calculate_skew_multiplier(self.market.skewing_coefficient, buy_percent)
-            } else {
-                1.0
-            };
-
-            tracing::debug!(
-                "bid_skew_scale: {} ask_skew_scale: {}",
-                bid_skew_scale,
-                ask_skew_scale
-            );
-
             let mm = self.create_mm_pair(
                 ref_book,
                 mm_book,
                 tkr_book,
-                bid_skew_scale,
-                ask_skew_scale,
                 shift,
             );
 
@@ -432,12 +405,12 @@ impl MarketMaker for MM {
             let mut mm_asks = mm.0;
             let mut mm_bids = mm.1;
 
-            if decarbonization && buy_percent < 50.0
+            if buy_percent < 50.0
             {
                 mm_asks = (Vec::new(), Vec::new());
             }
 
-            if decarbonization && buy_percent > 50.0
+            if buy_percent > 50.0
             {
                 mm_bids = (Vec::new(), Vec::new());
             }
@@ -492,30 +465,17 @@ impl MarketMaker for MM {
         ref_book: &OrderBook,
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
-        bid_skew_scale: f64,
-        ask_skew_scale: f64,
         shift: f64,
     ) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)) {
         let ref_mid_price = ref_book.calculate_mid_prices();
         let mm_mid_price = mm_book.calculate_mid_prices();
-        let spread = if ask_skew_scale > bid_skew_scale  {subtract(&mm_mid_price,&ref_mid_price)} else { subtract(&ref_mid_price,&mm_mid_price) };
+        let spread =  subtract(&ref_mid_price,&mm_mid_price);
         let half_spread = divide(&spread, 2.0);
         tracing::debug!("half_spread: {:?}", half_spread);
 
-        let abs_half_spread = abs(&half_spread);
-        tracing::debug!("abs_half_spread: {:?}", abs_half_spread);
+        let mm_bid_prices = subtract(&mm_mid_price, &half_spread);
 
-        let bid_skew_spread = multiply(&abs_half_spread, bid_skew_scale - 1.0);
-        tracing::debug!("bid_skew_spread: {:?}", bid_skew_spread);
-
-        let mut mm_bid_prices = subtract(&mm_mid_price, &half_spread);
-        mm_bid_prices = subtract(&mm_bid_prices, &bid_skew_spread);
-
-        let ask_skew_spread = multiply(&abs_half_spread, ask_skew_scale - 1.0);
-        tracing::debug!("ask_skew_spread: {:?}", ask_skew_spread);
-
-        let mut mm_ask_prices = add(&mm_mid_price, &half_spread);
-        mm_ask_prices = add(&mm_ask_prices, &ask_skew_spread);
+        let mm_ask_prices = add(&mm_mid_price, &half_spread);
 
         let mm_bid_sizes = tkr_book.bid_shift(shift);
         let mm_ask_sizes = tkr_book.ask_shift(shift);
