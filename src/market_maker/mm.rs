@@ -116,7 +116,6 @@ pub trait MarketMaker {
         shift: f64
     );
 
-    fn calculate_skew_multiplier(skewing_coefficient: f64, percent: f64) -> f64;
     fn create_mm_pair(
         &self,
         ref_book: &OrderBook,
@@ -418,46 +417,6 @@ impl MarketMaker for MM {
             self.place_maker_orders(&(mm_asks, mm_bids));
             self.last_mm_instant = Instant::now();
         }
-    }
-
-    /// Calculates the skewing multiplier in order to disincentivize one side of the order making.
-    /// This is needed to ensure long/short balancing.
-    ///
-    /// # Arguments
-    ///
-    /// * `skewing_coefficient` - Typically 1.0. May be bigger than 1.0 if market making is to be
-    /// seriously disincentivized but values less than 1.0 are not accepted.
-    /// * `percent` - Order fills percentage volume of the opposite side of the book.
-    /// It can be at most 50.0. Values bigger than 50.0 is not accepted since if so skewing will not
-    /// be needed.
-    ///
-    /// # Example
-    ///
-    /// let result = calculate_skew_multiplier(1.0, 50.0);
-    /// assert_eq!(result, 1.0); for 50 there will be no skewing.
-    ///
-    /// let result = calculate_skew_multiplier(1.0, 25.0);
-    /// assert_eq!(result, 1.5); for 25 there will be more skewing.
-    ///
-    /// let result = calculate_skew_multiplier(1.0, 0.0);
-    /// assert_eq!(result, 2); for 0.0 there will be max skewing.
-    ///
-    /// All values above are calculated for skewing_coefficient = 1.0. Bigger the value more
-    /// disincentivization comes to pass.
-    fn calculate_skew_multiplier(skewing_coefficient: f64, percent: f64) -> f64 {
-        if percent > 50.0 {
-            panic!(
-                "percent: {} is out of range. It must be in between 0 and 50",
-                percent
-            );
-        }
-        if skewing_coefficient < 1.0 {
-            panic!(
-                "skewing_coefficient: {} is out of range. It must be bigger than 1.0",
-                skewing_coefficient
-            );
-        }
-        skewing_coefficient * (1.0 + (50.0 - percent) / 50.0)
     }
 
     fn create_mm_pair(
