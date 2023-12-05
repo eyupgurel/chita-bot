@@ -444,7 +444,7 @@ impl MarketMaker for MM {
                 .zip(tkr_bid_prices.into_iter().zip(tkr_bid_sizes.into_iter()))
                 .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
                 .filter(|&(ask_price, ask_size, tkr_bid_price, tkr_bid_size)|
-                    ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price && ask_size <= tkr_bid_size )
+                    ask_price > tkr_bid_price && ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price && ask_size <= tkr_bid_size )
                 .collect::<Vec<_>>().iter()
                 .map(|&(a, b, _, _)| (a, b)) // Keep only the first two elements of each tuple
                 .collect();
@@ -459,7 +459,7 @@ impl MarketMaker for MM {
                 .zip(tkr_ask_prices.into_iter().zip(tkr_ask_sizes.into_iter()))
                 .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
                 .filter(|&(bid_price, bid_size, tkr_ask_price, tkr_ask_size)|
-                    bid_price * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price && bid_size <= tkr_ask_size)
+                   bid_price < tkr_ask_price && bid_price * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price && bid_size <= tkr_ask_size)
                 .collect::<Vec<_>>().iter()
                 .map(|&(a, b, _, _)| (a, b)) // Keep only the first two elements of each tuple
                 .collect();
