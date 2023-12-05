@@ -435,7 +435,39 @@ impl MarketMaker for MM {
                 mm_bids = (Vec::new(), Vec::new());
             }
 
-            self.place_maker_orders(&(mm_asks, mm_bids));
+            let (ask_prices, ask_sizes) = mm_asks.clone();
+
+            let (tkr_bid_prices, tkr_bid_sizes): (Vec<f64>, Vec<f64>) = tkr_book.bids.clone().into_iter().unzip();
+
+
+            let filtered_mm_asks: Vec<(f64, f64)> = ask_prices.into_iter().zip(ask_sizes.into_iter())
+                .zip(tkr_bid_prices.into_iter().zip(tkr_bid_sizes.into_iter()))
+                .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
+                .filter(|&(ask_price, ask_size, tkr_bid_price, tkr_bid_size)|
+                    ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price && ask_size <= tkr_bid_size )
+                .collect::<Vec<_>>().iter()
+                .map(|&(a, b, _, _)| (a, b)) // Keep only the first two elements of each tuple
+                .collect();
+
+
+            let (bid_prices, bid_sizes) = mm_bids.clone();
+
+            let (tkr_ask_prices, tkr_ask_sizes): (Vec<f64>, Vec<f64>) = tkr_book.asks.clone().into_iter().unzip();
+
+
+            let filtered_mm_bids: Vec<(f64, f64)> = bid_prices.into_iter().zip(bid_sizes.into_iter())
+                .zip(tkr_ask_prices.into_iter().zip(tkr_ask_sizes.into_iter()))
+                .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
+                .filter(|&(bid_price, bid_size, tkr_ask_price, tkr_ask_size)|
+                    bid_price * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price && bid_size <= tkr_ask_size)
+                .collect::<Vec<_>>().iter()
+                .map(|&(a, b, _, _)| (a, b)) // Keep only the first two elements of each tuple
+                .collect();
+
+            let (ask_prices, ask_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_asks.into_iter().unzip();
+            let (bid_prices, bid_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_bids.into_iter().unzip();
+
+            self.place_maker_orders(&((ask_prices, ask_sizes), (bid_prices, bid_sizes)));
             self.last_mm_instant = Instant::now();
         }
     }
