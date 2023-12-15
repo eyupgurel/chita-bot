@@ -1,4 +1,4 @@
-use crate::bluefin::{parse_user_position, AccountData, AccountUpdateEventData, BluefinClient, UserPosition, OrderUpdate, parse_order_update};
+use crate::bluefin::{parse_user_position, AccountData, BluefinClient, UserPosition, OrderUpdate, parse_order_update};
 use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{Credentials, KuCoinClient};

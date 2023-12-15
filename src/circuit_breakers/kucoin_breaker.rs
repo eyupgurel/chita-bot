@@ -1,5 +1,4 @@
 use std::time::Duration;
-use log::{info, warn};
 use tokio::time::Instant;
 use crate::env;
 use crate::env::EnvVars;
