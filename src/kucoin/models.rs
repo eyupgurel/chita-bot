@@ -247,7 +247,7 @@ pub struct TransactionHistory {
     pub data: TransactionData,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailableBalance {
     // Note: The 'userId' field is deprecated and will be deleted later.
@@ -258,11 +258,11 @@ pub struct AvailableBalance {
     pub data: BalanceData,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceData {
-    pub available_balance: i32,
-    pub hold_balance: i32,
+    pub available_balance: f64,
+    pub hold_balance: f64,
     pub currency: String,
     pub timestamp: i64,
 }

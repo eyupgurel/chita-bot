@@ -2,7 +2,8 @@
 
   "circuit_breaker_config": {
     "num_retries": 3,
-    "failure_threshold": 3
+    "failure_threshold": 3,
+    "loss_threshold_bps": 3.0
   },
 
 
@@ -11,7 +12,7 @@
       "name": "eth",
       "mm_lot_upper_bound": 100,
       "lot_size": 100,
-      "min_size": "0.01",
+      "min_size": "0.001",
       "price_precision": 2,
       "skewing_coefficient": 1.0,
       "symbols": {

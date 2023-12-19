@@ -41,4 +41,3 @@ rust_decimal = "1.17.0"
 tracing-subscriber = { version = "0.3.16", features = ["json"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
-memoize = "0.4.1"

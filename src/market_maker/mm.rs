@@ -17,10 +17,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
+use crate::circuit_breakers::threshold_breaker::ThresholdCircuitBreaker;
 use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
 use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
-
-use crate::kucoin::{CallResponse, Credentials, KuCoinClient};
+use crate::kucoin::{CallResponse, Credentials, KuCoinClient, AvailableBalance};
 use crate::models::common::{add, divide, round_to_precision, subtract, BookOperations, Market, OrderBook, CircuitBreakerConfig};
 use crate::models::kucoin_models::Level2Depth;
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
@@ -37,11 +37,12 @@ pub struct MM {
     last_mm_instant: Instant,
     rx_stats: Receiver<f64>,
     rx_account_data: Receiver<AccountData>,
+    rx_account_data_kc: Receiver<AvailableBalance>,
     rx_hedger_stats: Receiver<f64>,
 }
 
 impl MM {
-    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> (MM, Sender<f64>, Sender<AccountData>, Sender<f64>) {
+    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> (MM, Sender<f64>, Sender<AccountData>, Sender<AvailableBalance>, Sender<f64>) {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -69,6 +70,7 @@ impl MM {
 
         let (tx_stats, rx_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
         let (tx_account_data, rx_account_data): (Sender<AccountData>, Receiver<AccountData>) = mpsc::channel();
+        let (tx_account_data_kc, rx_account_data_kc) : (Sender<AvailableBalance>, Receiver<AvailableBalance>) = mpsc::channel();
         let (tx_hedger_stats, rx_hedger_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
 
         (
@@ -88,10 +90,12 @@ impl MM {
                 last_mm_instant: Instant::now(),
                 rx_stats,
                 rx_account_data,
+                rx_account_data_kc,
                 rx_hedger_stats,
             },
             tx_stats,
             tx_account_data,
+            tx_account_data_kc,
             tx_hedger_stats
         )
     }
@@ -230,6 +234,13 @@ impl MarketMaker for MM {
 
         let mut rx_stats_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
 
+
+        
+        //Account Balance threshold breaker
+        let mut account_balance_threshold_breaker = ThresholdCircuitBreaker::new(self.cb_config.clone());
+
+        
+
         loop {
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
@@ -365,17 +376,44 @@ impl MarketMaker for MM {
                     }
                 }
             }
-            match self.rx_account_data.try_recv() {
+            
+
+            match self.rx_account_data_kc.try_recv() {
                 Ok(value) => {
-                    todo!()
+                    tracing::debug!("Kucoin available balance: {:?}", value.data.available_balance);
+                    account_balance_threshold_breaker.push_kucoin_balance(value.data.available_balance);
+                    account_balance_threshold_breaker.cache_base_account_balance();
+                    if account_balance_threshold_breaker.is_balance_critical() {
+                        panic!("User balance critically low. Shutting down to prevent further loss...");
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::debug!("account data worker has disconnected!");
+                    tracing::debug!("Kucoin account data worker has disconnected!");
                 }
             }
+            
+            match self.rx_account_data.try_recv() {
+                Ok(value) => {
+                    tracing::debug!("Bluefin available balance: {:?}", value.free_collateral);
+                    account_balance_threshold_breaker.push_bluefin_balance(value.free_collateral);
+                    account_balance_threshold_breaker.cache_base_account_balance();
+                    if account_balance_threshold_breaker.is_balance_critical() {
+                        panic!("User balance critically low. Shutting down to prevent further loss...");
+                    }
+                    
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from bluefin yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::debug!("bluefin account data worker has disconnected!");
+                }
+            }
+
+
             match self.rx_hedger_stats.try_recv() {
                 Ok(value) => {
                     tracing::debug!("kucoin quantity: {:?}", value);
@@ -389,11 +427,11 @@ impl MarketMaker for MM {
                 }
             }
 
-
-
             self.debug_ob_map(&ob_map);
         }
     }
+
+    
 
     fn market_make(
         &mut self,

@@ -278,6 +278,7 @@ pub mod client {
         ) -> Order {
             // assuming market will exist in markets map
             // TODO add if/else checks
+            // TODO: check to use limit order
             let market_id = self.markets.get(market).unwrap().to_string();
 
             let leverage = leverage.unwrap_or_else(|| self.leverage);

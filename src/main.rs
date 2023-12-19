@@ -22,6 +22,7 @@ use crate::hedge::hedger::{Hedger, HGR};
 use crate::models::common::Config;
 use crate::statistics::stats::{Statistics, Stats};
 use env::EnvVars;
+use kucoin::AvailableBalance;
 use crate::bluefin::AccountData;
 use crate::statistics::account_stats::{AccountStatistics, AccountStats};
 
@@ -47,12 +48,13 @@ fn main() {
     let config: Config = serde_json::from_str(&config_str).expect("JSON was not well-formatted");
 
     let mut v_tx_account_data: Vec<Sender<AccountData>> = Vec::new();
+    let mut v_tx_account_data_kc: Vec<Sender<AvailableBalance>> = Vec::new();
     let mut mm_handles: Vec<JoinHandle<()>> = Vec::new();
     let mut statistic_handles: Vec<JoinHandle<()>> = Vec::new();
     let mut hgr_handles: Vec<JoinHandle<()>> = Vec::new();
 
     for market in config.markets.clone() {
-        let (mut mm, tx_stats, tx_account_data, tx_hedger) = MM::new(market.clone(), config.circuit_breaker_config.clone());
+        let (mut mm, tx_stats, tx_account_data, tx_account_data_kc, tx_hedger) = MM::new(market.clone(), config.circuit_breaker_config.clone());
 
         let mm_handle = thread::spawn(move || {
             mm.connect();
@@ -65,6 +67,7 @@ fn main() {
         });
 
         v_tx_account_data.push(tx_account_data);
+        v_tx_account_data_kc.push(tx_account_data_kc);
 
         let market_clone_for_hgr = market.clone(); // Clone market again for the hedger thread
 
@@ -80,7 +83,7 @@ fn main() {
 
 
     let account_stats_handle = thread::spawn(move || {
-        AccountStats::new(config, v_tx_account_data).log();
+        AccountStats::new(config, v_tx_account_data, v_tx_account_data_kc).log();
     });
 
     let mut combined_handles = mm_handles;
