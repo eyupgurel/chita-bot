@@ -120,38 +120,38 @@ impl AccountStatistics for AccountStats{
         });
 
         loop {
-            let tx_history = self.kucoin_client.get_transaction_history();
-            let total_account_balance = <AccountStats as AccountStatistics>::process_transaction_history(&tx_history);
+            // let tx_history = self.kucoin_client.get_transaction_history();
+            // let total_account_balance = <AccountStats as AccountStatistics>::process_transaction_history(&tx_history);
 
-            let position_list = self.kucoin_client.get_position_list();
+            // let position_list = self.kucoin_client.get_position_list();
 
-            let total_unrealised_pnl = <AccountStats as AccountStatistics>::sum_unrealised_pnl(&position_list);
+            // let total_unrealised_pnl = <AccountStats as AccountStatistics>::sum_unrealised_pnl(&position_list);
 
 
-            position_list.data.iter()
-                .for_each(|position| {
-                    let bluefin_market =  <AccountStats as AccountStatistics>::get_bluefin_symbol(&self.config, &position.symbol);
-                    match bluefin_market{
-                        Some(value) => tracing::info!(market = value,
-                                                            current_qty=position.current_qty,
-                                                            pos_margin=position.pos_margin,
-                                                             unrealised_pnl= position.unrealised_pnl,
-                                                            "Kucoin Market Data"),
-                        _ => {}
-                    }
+            // position_list.data.iter()
+            //     .for_each(|position| {
+            //         let bluefin_market =  <AccountStats as AccountStatistics>::get_bluefin_symbol(&self.config, &position.symbol);
+            //         match bluefin_market{
+            //             Some(value) => tracing::info!(market = value,
+            //                                                 current_qty=position.current_qty,
+            //                                                 pos_margin=position.pos_margin,
+            //                                                  unrealised_pnl= position.unrealised_pnl,
+            //                                                 "Kucoin Market Data"),
+            //             _ => {}
+            //         }
 
-                });
+            //     });
 
-            tracing::info!(total_account_balance=total_account_balance,
-                           total_unrealised_pnl=total_unrealised_pnl,
-                           "Kucoin Account Data");
+            // tracing::info!(total_account_balance=total_account_balance,
+            //                total_unrealised_pnl=total_unrealised_pnl,
+            //                "Kucoin Account Data");
 
            
 
             match rx_kucoin_available_balance.try_recv() {
                 Ok(value) => {
                     let balance = value.1;
-                    tracing::info!("AvailableBalance: {:?}", balance.data.available_balance);
+                    tracing::info!("Kucoin Available Balance: {:?}", balance.data.available_balance);
                     let _ = self.v_tx_account_data_kc.iter()
                         .try_for_each(|sender| {
                             let clone = balance.clone();
@@ -162,13 +162,13 @@ impl AccountStatistics for AccountStats{
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::debug!("AvailableBalance socket has disconnected!");
+                    tracing::debug!("Kucoin AvailableBalance socket has disconnected!");
                 }
             }
 
             match rx_bluefin_account_data_update.try_recv() {
                 Ok(value) => {
-                    tracing::info!("AccountData: {:?}", value);
+                    tracing::info!("Bluefin AccountData: {:?}", value);
                     let _ = self.v_tx_account_data.iter()
                         .try_for_each(|sender| {
                             let clone = value.clone();
@@ -179,7 +179,7 @@ impl AccountStatistics for AccountStats{
                     // No message from bluefin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::debug!("AccountData socket has disconnected!");
+                    tracing::debug!("Bluefin AccountData socket has disconnected!");
                 }
             }
 
