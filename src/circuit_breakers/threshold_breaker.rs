@@ -1,5 +1,3 @@
-use std::ptr::null;
-
 use chrono::Duration;
 use chrono::Utc;
 use chrono::DateTime;
@@ -53,9 +51,8 @@ impl ThresholdCircuitBreaker {
             let bf_balance = self.bluefin_balance_stack.pop().expect("Could not fetch balance from Bluefin account stats");
 
             let user_balance = bf_balance + kc_balance;
-            if user_balance >= self.daily_base_balance - (self.daily_base_balance * ({self.config.loss_threshold_bps as f64} /10_000.0)) {
-                return true;
-            }
+
+            return !(user_balance >= self.daily_base_balance - (self.daily_base_balance * ({self.config.loss_threshold_bps as f64} /10_000.0)));   
         }
         
         return false;
@@ -67,15 +64,20 @@ mod test {
     use rand::Rng;
     use super::*;
 
-    #[test]
-    fn test_stacks_single_thread() {
+    fn prepare_breaker() -> (CircuitBreakerConfig, ThresholdCircuitBreaker) {
         let config = CircuitBreakerConfig {
             num_retries: 3,
             failure_threshold: 3,
             loss_threshold_bps: 3.0,
         };
-        let mut breaker = ThresholdCircuitBreaker::new(config);
+        let breaker = ThresholdCircuitBreaker::new(config);
 
+        (config, breaker)
+    }
+
+    #[test]
+    fn test_stacks_daily_balance() {
+        let (_config, mut breaker) = prepare_breaker();
         breaker.cache_base_account_balance();
         assert_eq!(-1.0, breaker.daily_base_balance); 
 
@@ -94,7 +96,7 @@ mod test {
 
             // print!("bluefin: {}, kucoin: {}, daily base balance: {}", breaker.bluefin_balance_stack.last().unwrap(), breaker.kucoin_balance_stack.last().unwrap(), breaker.daily_base_balance);
 
-            assert_eq!((breaker.bluefin_balance_stack.last().unwrap() + breaker.kucoin_balance_stack.last().unwrap()), breaker.daily_base_balance);
+            assert_eq!((breaker.bluefin_balance_stack.last().unwrap() + breaker.kucoin_balance_stack.last().unwrap()), breaker.daily_base_balance); 
 
             print!("\n");
             i += 1;
@@ -102,7 +104,30 @@ mod test {
     }
 
     #[test]
-    fn test_stacks_multi_thread() {
+    fn test_is_balance_critical_pass() {
+        let (_config, mut breaker) = prepare_breaker();
         
+        let bluefin_balance = 2.0;
+        let kucoin_balance = 3.0;
+
+        breaker.push_bluefin_balance(bluefin_balance);
+        breaker.push_kucoin_balance(kucoin_balance);
+        breaker.daily_base_balance = bluefin_balance + kucoin_balance;
+
+        assert_eq!(false, breaker.is_balance_critical());
+    }
+
+    #[test]
+    fn test_is_balance_critical_fail() {
+        let (_config, mut breaker) = prepare_breaker();
+        
+        let bluefin_balance = 2.0;
+        let kucoin_balance = 3.0;
+
+        breaker.push_bluefin_balance(bluefin_balance);
+        breaker.push_kucoin_balance(kucoin_balance);
+        breaker.daily_base_balance = 2.0 * (bluefin_balance + kucoin_balance);
+
+        assert!(breaker.is_balance_critical());
     }
 }
