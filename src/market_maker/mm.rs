@@ -11,13 +11,14 @@ use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
 use log::{debug, error, info};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
-use crate::circuit_breakers::threshold_breaker::ThresholdCircuitBreaker;
+use crate::circuit_breakers::threshold_breaker::{ClientType, ThresholdCircuitBreaker};
 use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
 use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
 use crate::kucoin::{CallResponse, Credentials, KuCoinClient, AvailableBalance};
@@ -100,14 +101,14 @@ impl MM {
         )
     }
 
-    fn cancel_order_breaker(&mut self, bluefin_market: String) -> CancelAllOrdersCircuitBreaker {
+    fn cancel_order_breaker(&mut self, market: String) -> CancelAllOrdersCircuitBreaker {
         CancelAllOrdersCircuitBreaker {
             circuit_breaker: CircuitBreakerBase {
                 config: self.cb_config.clone(),
                 num_failures: 0,
                 state: State::Closed,
                 kucoin_breaker: KuCoinBreaker::new(),
-                market: bluefin_market.clone(),
+                market,
             }
         }
     }
@@ -220,7 +221,7 @@ impl MarketMaker for MM {
 
 
         // ---- Circuit Breakers ---- //
-
+        let vars = env::env_variables();
 
         let mut kucoin_ob_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
         let mut kucoin_ticker_disconnect_breaker = self.cancel_order_breaker(bluefin_market.clone());
@@ -381,11 +382,7 @@ impl MarketMaker for MM {
             match self.rx_account_data_kc.try_recv() {
                 Ok(value) => {
                     tracing::debug!("Kucoin available balance: {:?}", value.data.available_balance);
-                    account_balance_threshold_breaker.push_kucoin_balance(value.data.available_balance);
-                    account_balance_threshold_breaker.cache_base_account_balance();
-                    if account_balance_threshold_breaker.is_balance_critical() {
-                        panic!("User balance critically low. Shutting down to prevent further loss...");
-                    }
+                    account_balance_threshold_breaker.check_user_balance(value.data.available_balance, ClientType::KUCOIN, &bluefin_market, vars.dry_run);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -398,11 +395,7 @@ impl MarketMaker for MM {
             match self.rx_account_data.try_recv() {
                 Ok(value) => {
                     tracing::debug!("Bluefin available balance: {:?}", value.free_collateral);
-                    account_balance_threshold_breaker.push_bluefin_balance(value.free_collateral);
-                    account_balance_threshold_breaker.cache_base_account_balance();
-                    if account_balance_threshold_breaker.is_balance_critical() {
-                        panic!("User balance critically low. Shutting down to prevent further loss...");
-                    }
+                    account_balance_threshold_breaker.check_user_balance(value.free_collateral, ClientType::BLUEFIN, &bluefin_market, vars.dry_run);
                     
                 }
                 Err(mpsc::TryRecvError::Empty) => {
