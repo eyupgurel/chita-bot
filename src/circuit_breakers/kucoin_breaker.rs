@@ -1,5 +1,4 @@
 use std::time::Duration;
-use log::{info, warn};
 use tokio::time::Instant;
 use crate::env;
 use crate::env::EnvVars;
@@ -108,6 +107,7 @@ mod test {
         let config = CircuitBreakerConfig {
             num_retries: 3,
             failure_threshold: 3,
+            loss_threshold_bps: 3.0,
         };
         let market = "ETH-PERP".to_string();
 

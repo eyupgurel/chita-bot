@@ -19,7 +19,7 @@ pub mod client {
     type HmacSha256 = Hmac<Sha256>;
 
     use crate::kucoin::models::{Error, FillsResponse, Method, RecentFillsResponse, Response, TransactionHistory};
-    use crate::models::kucoin_models::{PositionList};
+    use crate::models::kucoin_models::PositionList;
 
     #[derive(Debug, Clone)]
     pub struct Credentials {
@@ -705,7 +705,7 @@ pub mod client {
         let since = now - 1000 * 60 * 60 * 24;
         let total_buy_size = client.get_fill_size_for_time_window("BTC-PERP", "buy", since);
         let total_sell_size = client.get_fill_size_for_time_window("BTC-PERP", "sell", since);
-        let buy_percent =
+        let _buy_percent =
             (total_buy_size as f64 / ((total_buy_size + total_sell_size) as f64)) * 100.0;
 
         assert_eq!(total_buy_size, 1, "Error getting recent fills");

@@ -30,7 +30,8 @@ pub struct Market {
 #[derive(Deserialize, Debug, Clone, Copy)]
 pub struct CircuitBreakerConfig {
     pub num_retries: u8,
-    pub failure_threshold: u8
+    pub failure_threshold: u8,
+    pub loss_threshold_bps: f32,
 }
 
 // Define the overall structure

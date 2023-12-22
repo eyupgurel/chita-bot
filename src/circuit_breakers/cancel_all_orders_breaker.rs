@@ -1,6 +1,4 @@
 use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
-use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
-use crate::models::common::CircuitBreakerConfig;
 
 pub struct CancelAllOrdersCircuitBreaker {
     pub circuit_breaker: CircuitBreakerBase
@@ -40,6 +38,8 @@ mod test {
     use super::*;
     use std::sync::mpsc;
     use std::thread;
+    use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
+    use crate::models::common::CircuitBreakerConfig;
 
     #[test]
     fn test_breaker_failure() {
@@ -54,6 +54,7 @@ mod test {
                 config: CircuitBreakerConfig {
                     num_retries: 3,
                     failure_threshold: 3,
+                    loss_threshold_bps: 3.0,
                 },
                 num_failures: 0,
                 state: State::Closed,
@@ -62,24 +63,24 @@ mod test {
             }
         };
 
-        let mut num_tries = 0;
+        let mut _num_tries = 0;
 
         match receiver.try_recv() {
-            Ok(value) => {
+            Ok(_value) => {
                 breaker.on_success();
-                num_tries += 1;
+                _num_tries += 1;
                 return;
             }
             Err(mpsc::TryRecvError::Empty) => {
 
             }
             Err(mpsc::TryRecvError::Disconnected) => {
-                num_tries += 1;
+                _num_tries += 1;
                 breaker.on_failure();
 
-                if num_tries == 3 {
+                if _num_tries == 3 {
                     assert_eq!(breaker.circuit_breaker.state, State::HalfOpen);
-                } else if num_tries > 3 {
+                } else if _num_tries > 3 {
                     assert_eq!(breaker.circuit_breaker.state, State::Open);
                 }
 
@@ -102,6 +103,7 @@ mod test {
                 config: CircuitBreakerConfig {
                     num_retries: 3,
                     failure_threshold: 3,
+                    loss_threshold_bps: 3.0,
                 },
                 num_failures: 0,
                 state: State::Closed,
