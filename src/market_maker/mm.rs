@@ -11,7 +11,6 @@ use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
 use log::{debug, error, info};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
-use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -40,10 +39,13 @@ pub struct MM {
     rx_account_data: Receiver<AccountData>,
     rx_account_data_kc: Receiver<AvailableBalance>,
     rx_hedger_stats: Receiver<f64>,
+    tx_bluefin_hedger_ob: Sender<OrderBook>,
+    tx_bluefin_hedger_ob_diff: Sender<OrderBook>,
 }
 
 impl MM {
-    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> (MM, Sender<f64>, Sender<AccountData>, Sender<AvailableBalance>, Sender<f64>) {
+    pub fn new(market: Market, cb_config: CircuitBreakerConfig) -> 
+        (MM, Sender<f64>, Sender<AccountData>, Sender<AvailableBalance>, Sender<f64>, Receiver<OrderBook>, Receiver<OrderBook>) {
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -73,6 +75,8 @@ impl MM {
         let (tx_account_data, rx_account_data): (Sender<AccountData>, Receiver<AccountData>) = mpsc::channel();
         let (tx_account_data_kc, rx_account_data_kc) : (Sender<AvailableBalance>, Receiver<AvailableBalance>) = mpsc::channel();
         let (tx_hedger_stats, rx_hedger_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
+        let (tx_bluefin_hedger_ob, rx_bluefin_hedger_ob): (Sender<OrderBook>, Receiver<OrderBook>) = mpsc::channel();
+        let (tx_bluefin_hedger_ob_diff, rx_bluefin_hedger_ob_diff): (Sender<OrderBook>, Receiver<OrderBook>) = mpsc::channel();
 
         (
             MM {
@@ -93,11 +97,15 @@ impl MM {
                 rx_account_data,
                 rx_account_data_kc,
                 rx_hedger_stats,
+                tx_bluefin_hedger_ob,
+                tx_bluefin_hedger_ob_diff,
             },
             tx_stats,
             tx_account_data,
             tx_account_data_kc,
-            tx_hedger_stats
+            tx_hedger_stats,
+            rx_bluefin_hedger_ob,
+            rx_bluefin_hedger_ob_diff,
         )
     }
 
@@ -326,6 +334,8 @@ impl MarketMaker for MM {
                 Ok(value) => {
                     tracing::debug!("bluefin ob: {:?}", value);
                     bluefin_ob_disconnect_breaker.on_success();
+                    let _ = self.tx_bluefin_hedger_ob.send(value.clone());
+
                     ob_map.insert("bluefin".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -343,6 +353,8 @@ impl MarketMaker for MM {
                 Ok(value) => {
                     tracing::debug!("diff of bluefin ob: {:?}", value);
                     bluefin_ob_diff_disconnect_breaker.on_success();
+                    let _ = self.tx_bluefin_hedger_ob_diff.send(value.clone());
+
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");

@@ -2,19 +2,27 @@ use crate::bluefin::{parse_user_position, AccountData, BluefinClient, UserPositi
 use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{Credentials, KuCoinClient};
-use crate::models::common::{CircuitBreakerConfig, Market};
+use crate::models::common::{CircuitBreakerConfig, Market, OrderBook};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
+use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
+use crate::models::kucoin_models::KucoinUserPosition;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use serde_json::Value;
+use std::ops::Add;
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
+use std::sync::mpsc::Receiver;
 use std::thread;
-use std::time::Duration;
+use crate::circuit_breakers::circuit_breaker::CircuitBreakerBase;
+use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
+use std::collections::HashMap;
+use crate::circuit_breakers::circuit_breaker::State;
+use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
+use crate::circuit_breakers::circuit_breaker::CircuitBreaker;
 
 static BIGNUMBER_BASE: u128 = 1000000000000000000;
-static HEDGE_PERIOD_DURATION: u64 = 1;
 
 pub struct HGR {
     pub market: Market,
@@ -25,10 +33,19 @@ pub struct HGR {
     bluefin_account: AccountData,
     bluefin_position: UserPosition,
     tx_hedger: Sender<f64>,
+    rx_bluefin_ob: Receiver<OrderBook>,
+    rx_bluefin_ob_diff: Receiver<OrderBook>
 }
 
 impl HGR {
-    pub fn new(market: Market, cb_config: CircuitBreakerConfig, tx_hedger: Sender<f64>) -> HGR {
+    pub fn new(
+        market: Market, 
+        cb_config: CircuitBreakerConfig, 
+        tx_hedger: Sender<f64>,
+        rx_bluefin_ob: Receiver<OrderBook>,
+        rx_bluefin_ob_diff: Receiver<OrderBook>,
+    ) -> HGR {
+        
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -64,14 +81,17 @@ impl HGR {
             bluefin_position,
             bluefin_account,
             tx_hedger,
+            rx_bluefin_ob,
+            rx_bluefin_ob_diff,
+
         }
     }
 }
 
 pub trait Hedger {
     fn connect(&mut self);
-    fn hedge(&mut self, dry_run:bool);
-    fn hedge_pos(&mut self, dry_run:bool);
+    fn hedge(&mut self, dry_run:bool, kucoin_position: KucoinUserPosition, ob: Option<&OrderBook>);
+    fn calc_limit_order_price(&mut self, hedge_qty: Decimal, side: bool, ob: &OrderBook) -> f64;
 }
 
 impl Hedger for HGR {
@@ -79,6 +99,8 @@ impl Hedger for HGR {
         let vars: EnvVars = env::env_variables();
         let (tx_bluefin_pos_update, _rx_bluefin_pos_update) = mpsc::channel();
         let (tx_bluefin_order_update, _rx_bluefin_order_update) = mpsc::channel();
+        let (tx_kucoin_pos_change, rx_kucoin_pos_change) = mpsc::channel();
+
         let bluefin_market = self.market.symbols.bluefin.to_owned();
         let bluefin_market_for_order_fill = bluefin_market.clone();
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
@@ -116,6 +138,7 @@ impl Hedger for HGR {
         });
 
         let bluefin_market = self.market.symbols.bluefin.to_owned();
+        
         let bluefin_market_for_order_fill = bluefin_market.clone();
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
@@ -147,35 +170,123 @@ impl Hedger for HGR {
             );
         });
 
-        thread::sleep(Duration::from_secs(5));
-        let dry_run = vars.dry_run;
-        self.hedge(dry_run);
-    }
 
-    fn hedge(&mut self, dry_run:bool) {
+        let topic = format!("/contract/position:{}", self.market.symbols.bluefin);
+        let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
+
+        let _handle_kucoin_pos_change = thread::spawn(move || {
+            stream_kucoin_socket(
+                &kucoin_private_socket_url,
+                &"",
+                &topic,
+                tx_kucoin_pos_change, // Sender channel of the appropriate type
+                |msg: &str| -> KucoinUserPosition {
+                    let kucoin_user_pos: KucoinUserPosition =
+                        serde_json::from_str(&msg).expect("Can't parse");
+
+                    kucoin_user_pos
+                },
+                &"position.change",
+                true
+            );
+        });
+
+        let dry_run = vars.dry_run;
+        let bluefin = "bluefin".to_string();
+
+        let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
+
+        let bluefin_market_for_pos_update_breaker = self.market.symbols.bluefin.clone();
+        let mut kucoin_pos_update_disconnect_breaker = CancelAllOrdersCircuitBreaker {
+            circuit_breaker: CircuitBreakerBase {
+                config: self.cb_config.clone(),
+                num_failures: 0,
+                state: State::Closed,
+                kucoin_breaker: KuCoinBreaker::new(),
+                market: bluefin_market_for_pos_update_breaker,
+            }
+        };
+
         loop {
-            self.hedge_pos(dry_run);
-            // Sleep for one second before next iteration
-            thread::sleep(Duration::from_secs(HEDGE_PERIOD_DURATION));
+            match self.rx_bluefin_ob.try_recv() {
+                Ok(value) => {
+                    tracing::debug!("hedger bluefin ob: {:?}", value);
+                    ob_map.insert(bluefin.clone(), value);
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+
+                }
+            }
+
+            match self.rx_bluefin_ob_diff.try_recv() {
+                Ok(value) => {
+                    tracing::debug!("hedger bluefin ob diff: {:?}", value);
+                    ob_map.insert(bluefin.clone(), value);
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+
+                }
+            }
+
+            match rx_kucoin_pos_change.try_recv() {
+                Ok(value) => {
+                    tracing::debug!("kucoin position update: {:?}", value.1);
+                    kucoin_pos_update_disconnect_breaker.on_success();
+                    self.hedge(dry_run, value.1, ob_map.get(&bluefin));
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from kucoin yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::debug!("Kucoin position update worker has disconnected!");
+                    if !kucoin_pos_update_disconnect_breaker.is_open() {
+                        kucoin_pos_update_disconnect_breaker.on_failure();
+                    }
+                }
+            }
         }
     }
-    fn hedge_pos(&mut self, dry_run:bool) {
+
+    fn calc_limit_order_price(&mut self, hedge_qty: Decimal, is_buy: bool, ob: &OrderBook) -> f64 {
+        let ob_pairs = if is_buy { &ob.bids } else { &ob.asks };
+
+        let mut cumulative_qty: Decimal = Decimal::new(0, hedge_qty.scale());
+        
+        let price = ob_pairs
+            .iter()
+            .find_map(|price_and_qty| {
+                cumulative_qty = cumulative_qty.add(Decimal::from_f64(price_and_qty.1).unwrap());
+                if cumulative_qty.ge(&hedge_qty) {
+                    Some(price_and_qty.0)
+                } else {
+                    None
+                }
+            });
+
+            if price.is_none() {
+                //if we get to the end of the depth and no price match - get last price of max depth
+                let max_depth_price = ob_pairs.last().unwrap().0;
+                tracing::info!("Could not match hedge price in Bluefin OB DOM, hedging at max depth {}", max_depth_price);
+                max_depth_price
+            } else {
+                tracing::info!("Hedging at {}", price.unwrap());
+                price.unwrap()
+            }
+    }
+
+    fn hedge(&mut self, dry_run:bool, kucoin_position: KucoinUserPosition, ob: Option<&OrderBook>) {
+        tracing::info!("Attempting to Hedge.... ");
 
         let bluefin_market = self.market.symbols.bluefin.to_owned();
 
-        // the call now returns Option(UserPosition)
-        let kucoin_position = self.kucoin_client.get_position(&bluefin_market);
-
-        // if we are unable to get KuCoin position just return
-        // this is possible due to rate limiting
-        if kucoin_position.is_none() {
-            return;
-        }
-
-        let kucoin_position = kucoin_position.unwrap();
-
         // unwrap kucoin position and get quantity
-        let kucoin_quantity = Decimal::from(kucoin_position.quantity);
+        let kucoin_quantity = Decimal::from(kucoin_position.current_qty);
 
         let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
 
@@ -218,18 +329,24 @@ impl Hedger for HGR {
             );
         }
 
-        if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() && !dry_run {
+        if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap() && !dry_run && ob.is_some() {
             {
                 tracing::debug!("order quantity as decimal: {}", order_quantity);
                 let order_quantity_f64 = order_quantity.to_f64().unwrap();
                 tracing::debug!("order quantity as f64: {}", order_quantity_f64);
-                let order = self.bluefin_client.create_market_order(
+
+                let price = self.calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
+                tracing::debug!("order price as f64: {}", price);                
+
+                let order = self.bluefin_client.create_limit_ioc_order(
                     &bluefin_market,
                     is_buy,
                     false,
+                    price,
                     order_quantity_f64,
                     None,
                 );
+
                 tracing::info!("order {:#?}", order);
                 let signature = self.bluefin_client.sign_order(order.clone());
                 let status = self

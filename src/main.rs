@@ -54,7 +54,15 @@ fn main() {
     let mut hgr_handles: Vec<JoinHandle<()>> = Vec::new();
 
     for market in config.markets.clone() {
-        let (mut mm, tx_stats, tx_account_data, tx_account_data_kc, tx_hedger) = MM::new(market.clone(), config.circuit_breaker_config.clone());
+        let (
+            mut mm, 
+            tx_stats, 
+            tx_account_data, 
+            tx_account_data_kc, 
+            tx_hedger,
+            rx_bluefin_hedger_ob,
+            rx_bluefin_hedger_ob_diff,
+        ) = MM::new(market.clone(), config.circuit_breaker_config.clone());
 
         let mm_handle = thread::spawn(move || {
             mm.connect();
@@ -72,7 +80,12 @@ fn main() {
         let market_clone_for_hgr = market.clone(); // Clone market again for the hedger thread
 
         let hgr_handle = thread::spawn(move || {
-            HGR::new(market_clone_for_hgr.clone(), config.circuit_breaker_config.clone(), tx_hedger).connect();
+            HGR::new(
+                market_clone_for_hgr.clone(), 
+                config.circuit_breaker_config.clone(), 
+                tx_hedger, 
+                rx_bluefin_hedger_ob, 
+                rx_bluefin_hedger_ob_diff).connect();
         });
 
         mm_handles.push(mm_handle);
