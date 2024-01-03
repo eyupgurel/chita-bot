@@ -284,7 +284,7 @@ impl Hedger for HGR {
     }
 
     fn calc_limit_order_price(hedge_qty: Decimal, is_buy: bool, ob: &OrderBook) -> f64 {
-        let ob_pairs = if is_buy { &ob.bids } else { &ob.asks };
+        let ob_pairs = if is_buy { &ob.asks } else { &ob.bids };
 
         let mut cumulative_qty: Decimal = Decimal::new(0, hedge_qty.scale());
         
@@ -409,7 +409,7 @@ pub mod tests {
 
 
     #[test]
-    fn test_calc_limit_order_price_bids() {
+    fn test_calc_limit_order_price_buy() {
         let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
         let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
 
@@ -420,30 +420,13 @@ pub mod tests {
 
         let hedge_qty = 3.000;
         let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), true, &ob);
-        let expected_limit_order_price = 44975.0;
-
-        assert_eq!(expected_limit_order_price, limit_order_price);
-    }
-
-    #[test]
-    fn test_calc_limit_order_price_asks() {
-        let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
-        let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
-
-        let ob = OrderBook {
-            asks,
-            bids,
-        };
-
-        let hedge_qty = 3.000;
-        let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), false, &ob);
         let expected_limit_order_price = 44997.600000000006;
 
         assert_eq!(expected_limit_order_price, limit_order_price);
     }
 
     #[test]
-    fn test_calc_limit_order_price_no_match_asks() {
+    fn test_calc_limit_order_price_sell() {
         let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
         let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
 
@@ -452,15 +435,15 @@ pub mod tests {
             bids,
         };
 
-        let hedge_qty = 100.00;
+        let hedge_qty = 3.000;
         let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), false, &ob);
-        let expected_limit_order_price = 45015.200000000004;
+        let expected_limit_order_price = 44975.0;
 
         assert_eq!(expected_limit_order_price, limit_order_price);
     }
 
     #[test]
-    fn test_calc_limit_order_price_no_match_bids() {
+    fn test_calc_limit_order_price_no_match_buy() {
         let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
         let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
 
@@ -471,6 +454,23 @@ pub mod tests {
 
         let hedge_qty = 100.00;
         let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), true, &ob);
+        let expected_limit_order_price = 45015.200000000004;
+
+        assert_eq!(expected_limit_order_price, limit_order_price);
+    }
+
+    #[test]
+    fn test_calc_limit_order_price_no_match_sell() {
+        let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
+        let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
+
+        let ob = OrderBook {
+            asks,
+            bids,
+        };
+
+        let hedge_qty = 100.00;
+        let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), false, &ob);
         let expected_limit_order_price = 44969.0;
 
         assert_eq!(expected_limit_order_price, limit_order_price);

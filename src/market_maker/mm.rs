@@ -21,7 +21,7 @@ use crate::circuit_breakers::threshold_breaker::{ClientType, ThresholdCircuitBre
 use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
 use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
 use crate::kucoin::{CallResponse, Credentials, KuCoinClient, AvailableBalance};
-use crate::models::common::{add, divide, round_to_precision, subtract, BookOperations, Market, OrderBook, CircuitBreakerConfig};
+use crate::models::common::{add, divide, round_to_precision, subtract, abs, BookOperations, Market, OrderBook, CircuitBreakerConfig};
 use crate::models::kucoin_models::Level2Depth;
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
@@ -525,7 +525,7 @@ impl MarketMaker for MM {
     ) -> ((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)) {
         let ref_mid_price = ref_book.calculate_mid_prices();
         let mm_mid_price = mm_book.calculate_mid_prices();
-        let spread =  subtract(&ref_mid_price,&mm_mid_price);
+        let spread =  abs(&subtract(&ref_mid_price,&mm_mid_price)); // use absolute value for spread
         let half_spread = divide(&spread, 2.0);
         tracing::debug!("half_spread: {:?}", half_spread);
 
