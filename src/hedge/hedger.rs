@@ -196,6 +196,28 @@ impl Hedger for HGR {
 
         let mut ob_map: HashMap<String, OrderBook> = HashMap::new();
 
+        let bluefin_market_for_ob_diff_update_breaker = self.market.symbols.bluefin.clone();
+        let mut bluefin_ob_diff_breaker = CancelAllOrdersCircuitBreaker {
+            circuit_breaker: CircuitBreakerBase {
+                config: self.cb_config.clone(),
+                num_failures: 0,
+                state: State::Closed,
+                kucoin_breaker: KuCoinBreaker::new(),
+                market: bluefin_market_for_ob_diff_update_breaker,
+            }
+        };
+
+        let bluefin_market_for_ob_update_breaker = self.market.symbols.bluefin.clone();
+        let mut bluefin_ob_breaker = CancelAllOrdersCircuitBreaker {
+            circuit_breaker: CircuitBreakerBase {
+                config: self.cb_config.clone(),
+                num_failures: 0,
+                state: State::Closed,
+                kucoin_breaker: KuCoinBreaker::new(),
+                market: bluefin_market_for_ob_update_breaker,
+            }
+        };
+
         let bluefin_market_for_pos_update_breaker = self.market.symbols.bluefin.clone();
         let mut kucoin_pos_update_disconnect_breaker = CancelAllOrdersCircuitBreaker {
             circuit_breaker: CircuitBreakerBase {
@@ -211,26 +233,32 @@ impl Hedger for HGR {
             match self.rx_bluefin_ob.try_recv() {
                 Ok(value) => {
                     tracing::debug!("hedger bluefin ob: {:?}", value);
+                    bluefin_ob_breaker.on_success();
                     ob_map.insert(bluefin.clone(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
 
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-
+                    if !bluefin_ob_breaker.is_open() {
+                        bluefin_ob_breaker.on_failure();
+                    }
                 }
             }
 
             match self.rx_bluefin_ob_diff.try_recv() {
                 Ok(value) => {
                     tracing::debug!("hedger bluefin ob diff: {:?}", value);
+                    bluefin_ob_diff_breaker.on_success();
                     ob_map.insert(bluefin.clone(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
 
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-
+                    if !bluefin_ob_diff_breaker.is_open() {
+                        bluefin_ob_diff_breaker.on_failure();
+                    }
                 }
             }
 
@@ -241,7 +269,7 @@ impl Hedger for HGR {
                     self.hedge(dry_run, value.1, ob_map.get(&bluefin));
                 }
                 Err(mpsc::TryRecvError::Empty) => {
-                    // No message from kucoin yet
+                    
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     tracing::debug!("Kucoin position update worker has disconnected!");
