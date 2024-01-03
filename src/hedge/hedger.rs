@@ -240,6 +240,7 @@ impl Hedger for HGR {
 
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::debug!("Bluefin Hedger OB worker has disconnected!");
                     if !bluefin_ob_breaker.is_open() {
                         bluefin_ob_breaker.on_failure();
                     }
@@ -256,6 +257,7 @@ impl Hedger for HGR {
 
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::debug!("Bluefin Hedger OB DIFF worker has disconnected!");
                     if !bluefin_ob_diff_breaker.is_open() {
                         bluefin_ob_diff_breaker.on_failure();
                     }
