@@ -91,7 +91,7 @@ impl HGR {
 pub trait Hedger {
     fn connect(&mut self);
     fn hedge(&mut self, dry_run:bool, kucoin_position: KucoinUserPosition, ob: Option<&OrderBook>);
-    fn calc_limit_order_price(&mut self, hedge_qty: Decimal, side: bool, ob: &OrderBook) -> f64;
+    fn calc_limit_order_price(hedge_qty: Decimal, is_buy: bool, ob: &OrderBook) -> f64;
 }
 
 impl Hedger for HGR {
@@ -253,7 +253,7 @@ impl Hedger for HGR {
         }
     }
 
-    fn calc_limit_order_price(&mut self, hedge_qty: Decimal, is_buy: bool, ob: &OrderBook) -> f64 {
+    fn calc_limit_order_price(hedge_qty: Decimal, is_buy: bool, ob: &OrderBook) -> f64 {
         let ob_pairs = if is_buy { &ob.bids } else { &ob.asks };
 
         let mut cumulative_qty: Decimal = Decimal::new(0, hedge_qty.scale());
@@ -335,7 +335,7 @@ impl Hedger for HGR {
                 let order_quantity_f64 = order_quantity.to_f64().unwrap();
                 tracing::debug!("order quantity as f64: {}", order_quantity_f64);
 
-                let price = self.calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
+                let price = HGR::calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
                 tracing::debug!("order price as f64: {}", price);                
 
                 let order = self.bluefin_client.create_limit_ioc_order(
@@ -365,5 +365,84 @@ impl Hedger for HGR {
                 self.bluefin_position.side = if new_pos > 0 { true } else { false };
             }
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::models::common::OrderBook;
+
+    use super::Hedger;
+    use super::HGR;
+    use bigdecimal::FromPrimitive;
+    use rust_decimal::Decimal;
+
+
+    #[test]
+    fn test_calc_limit_order_price_bids() {
+        let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
+        let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
+
+        let ob = OrderBook {
+            asks,
+            bids,
+        };
+
+        let hedge_qty = 3.000;
+        let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), true, &ob);
+        let expected_limit_order_price = 44975.0;
+
+        assert_eq!(expected_limit_order_price, limit_order_price);
+    }
+
+    #[test]
+    fn test_calc_limit_order_price_asks() {
+        let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
+        let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
+
+        let ob = OrderBook {
+            asks,
+            bids,
+        };
+
+        let hedge_qty = 3.000;
+        let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), false, &ob);
+        let expected_limit_order_price = 44997.600000000006;
+
+        assert_eq!(expected_limit_order_price, limit_order_price);
+    }
+
+    #[test]
+    fn test_calc_limit_order_price_no_match_asks() {
+        let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
+        let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
+
+        let ob = OrderBook {
+            asks,
+            bids,
+        };
+
+        let hedge_qty = 100.00;
+        let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), false, &ob);
+        let expected_limit_order_price = 45015.200000000004;
+
+        assert_eq!(expected_limit_order_price, limit_order_price);
+    }
+
+    #[test]
+    fn test_calc_limit_order_price_no_match_bids() {
+        let asks = vec![(44988.0, 0.001), (44990.9, 2.222), (44997.600000000006, 4.444), (45001.5, 0.001), (45015.200000000004, 0.001)];
+        let bids = vec![(44977.9, 0.1), (44976.3, 1.867), (44975.0, 1.334), (44972.100000000006, 2.223), (44969.0, 4.447)];
+
+        let ob = OrderBook {
+            asks,
+            bids,
+        };
+
+        let hedge_qty = 100.00;
+        let limit_order_price = HGR::calc_limit_order_price(Decimal::from_f64(hedge_qty).unwrap(), true, &ob);
+        let expected_limit_order_price = 44969.0;
+
+        assert_eq!(expected_limit_order_price, limit_order_price);
     }
 }
