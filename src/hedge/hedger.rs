@@ -232,7 +232,7 @@ impl Hedger for HGR {
         loop {
             match self.rx_bluefin_ob.try_recv() {
                 Ok(value) => {
-                    tracing::debug!("hedger bluefin ob: {:?}", value);
+                    tracing::info!("hedger bluefin ob: {:?}", value);
                     bluefin_ob_breaker.on_success();
                     ob_map.insert(bluefin.clone(), value);
                 }
@@ -240,7 +240,7 @@ impl Hedger for HGR {
 
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::debug!("Bluefin Hedger OB worker has disconnected!");
+                    tracing::info!("Bluefin Hedger OB worker has disconnected!");
                     if !bluefin_ob_breaker.is_open() {
                         bluefin_ob_breaker.on_failure();
                     }
@@ -249,7 +249,7 @@ impl Hedger for HGR {
 
             match self.rx_bluefin_ob_diff.try_recv() {
                 Ok(value) => {
-                    tracing::debug!("hedger bluefin ob diff: {:?}", value);
+                    tracing::info!("hedger bluefin ob diff: {:?}", value);
                     bluefin_ob_diff_breaker.on_success();
                     ob_map.insert(bluefin.clone(), value);
                 }
