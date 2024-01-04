@@ -6,6 +6,7 @@ use crate::models::common::{CircuitBreakerConfig, Market, OrderBook};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
 use crate::models::kucoin_models::KucoinUserPosition;
+use crate::kucoin::PositionChangeEvent;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -171,20 +172,25 @@ impl Hedger for HGR {
         });
 
 
-        let topic = format!("/contract/position:{}", self.market.symbols.bluefin);
+        let kucoin_market_for_pos_update = self.market.symbols.kucoin.clone();
+        let topic = "/contract/position";
+        // let topic = format!("/contract/position:{}", self.market.symbols.bluefin);
         let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
 
         let _handle_kucoin_pos_change = thread::spawn(move || {
             stream_kucoin_socket(
                 &kucoin_private_socket_url,
-                &"",
+                &kucoin_market_for_pos_update,
                 &topic,
                 tx_kucoin_pos_change, // Sender channel of the appropriate type
                 |msg: &str| -> KucoinUserPosition {
-                    let kucoin_user_pos: KucoinUserPosition =
+                    let kucoin_user_pos: PositionChangeEvent =
                         serde_json::from_str(&msg).expect("Can't parse");
 
-                    kucoin_user_pos
+                        tracing::info!(kucoin_current_qty=kucoin_user_pos.data.current_qty,
+                            "Kucoin User Position");
+                        
+                    kucoin_user_pos.data
                 },
                 &"position.change",
                 true
@@ -232,7 +238,7 @@ impl Hedger for HGR {
         loop {
             match self.rx_bluefin_ob.try_recv() {
                 Ok(value) => {
-                    tracing::info!("hedger bluefin ob: {:?}", value);
+                    tracing::debug!("hedger bluefin ob: {:?}", value);
                     bluefin_ob_breaker.on_success();
                     ob_map.insert(bluefin.clone(), value);
                 }
@@ -240,7 +246,7 @@ impl Hedger for HGR {
 
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::info!("Bluefin Hedger OB worker has disconnected!");
+                    tracing::debug!("Bluefin Hedger OB worker has disconnected!");
                     if !bluefin_ob_breaker.is_open() {
                         bluefin_ob_breaker.on_failure();
                     }
@@ -249,7 +255,7 @@ impl Hedger for HGR {
 
             match self.rx_bluefin_ob_diff.try_recv() {
                 Ok(value) => {
-                    tracing::info!("hedger bluefin ob diff: {:?}", value);
+                    tracing::debug!("hedger bluefin ob diff: {:?}", value);
                     bluefin_ob_diff_breaker.on_success();
                     ob_map.insert(bluefin.clone(), value);
                 }
@@ -257,7 +263,7 @@ impl Hedger for HGR {
 
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::info!("Bluefin Hedger OB DIFF worker has disconnected!");
+                    tracing::debug!("Bluefin Hedger OB DIFF worker has disconnected!");
                     if !bluefin_ob_diff_breaker.is_open() {
                         bluefin_ob_diff_breaker.on_failure();
                     }
@@ -266,7 +272,7 @@ impl Hedger for HGR {
 
             match rx_kucoin_pos_change.try_recv() {
                 Ok(value) => {
-                    tracing::info!("kucoin position update: {:?}", value.1);
+                    tracing::debug!("kucoin position update: {:?}", value.1);
                     kucoin_pos_update_disconnect_breaker.on_success();
                     self.hedge(dry_run, value.1, ob_map.get(&bluefin));
                 }
