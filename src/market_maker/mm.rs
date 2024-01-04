@@ -421,7 +421,7 @@ impl MarketMaker for MM {
 
             match self.rx_hedger_stats.try_recv() {
                 Ok(value) => {
-                    tracing::debug!("kucoin quantity: {:?}", value);
+                    tracing::info!("kucoin quantity: {:?}", value);
                     kucoin_quantity = value;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
