@@ -174,9 +174,8 @@ impl Hedger for HGR {
 
         let kucoin_market_for_pos_update = self.market.symbols.kucoin.clone();
         let topic = "/contract/position";
-        // let topic = format!("/contract/position:{}", self.market.symbols.bluefin);
         let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
-
+        let lot_size_for_user_pos_change = self.market.lot_size.clone();
         let _handle_kucoin_pos_change = thread::spawn(move || {
             stream_kucoin_socket(
                 &kucoin_private_socket_url,
@@ -187,7 +186,9 @@ impl Hedger for HGR {
                     let kucoin_user_pos: PositionChangeEvent =
                         serde_json::from_str(&msg).expect("Can't parse");
 
-                        tracing::info!(kucoin_current_qty=kucoin_user_pos.data.current_qty,
+                        tracing::info!(
+                            kucoin_user_position=kucoin_user_pos.data.current_qty,
+                            lot_size=lot_size_for_user_pos_change,
                             "Kucoin User Position");
                         
                     kucoin_user_pos.data
