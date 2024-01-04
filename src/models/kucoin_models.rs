@@ -135,7 +135,7 @@ pub struct PositionList {
     pub data: Vec<Position>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct KucoinUserPosition {
     pub realised_gross_pnl: f64,
@@ -164,7 +164,7 @@ pub struct KucoinUserPosition {
     pub change_reason: String, //changeReason:marginChange、positionChange、liquidation、autoAppendMarginStatusChange、adl
     pub current_cost: f64,
     pub opening_timestamp: u64,
-    pub current_qty: u64,
+    pub current_qty: i128,
     pub delev_percentage: f64,
     pub current_comm: f64,
     pub realised_gross_cost: f64,

@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde_derive::Serialize;
 use crate::models::common::deserialize_optional_f64;
 use crate::models::common::deserialize_string_to_f64;
+use crate::models::kucoin_models::KucoinUserPosition;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -245,6 +246,17 @@ pub struct TransactionData {
 pub struct TransactionHistory {
     pub code: String,
     pub data: TransactionData,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionChangeEvent {
+     // Note: The 'userId' field is deprecated and will be deleted later.
+     #[serde(skip_deserializing)]
+     pub user_id: Option<String>,
+     pub topic: String,
+     pub subject: String,
+     pub data: KucoinUserPosition,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

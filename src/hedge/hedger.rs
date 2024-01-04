@@ -6,6 +6,7 @@ use crate::models::common::{CircuitBreakerConfig, Market, OrderBook};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
 use crate::models::kucoin_models::KucoinUserPosition;
+use crate::kucoin::PositionChangeEvent;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -171,20 +172,26 @@ impl Hedger for HGR {
         });
 
 
-        let topic = format!("/contract/position:{}", self.market.symbols.bluefin);
+        let kucoin_market_for_pos_update = self.market.symbols.kucoin.clone();
+        let topic = "/contract/position";
         let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
-
+        let lot_size_for_user_pos_change = self.market.lot_size.clone();
         let _handle_kucoin_pos_change = thread::spawn(move || {
             stream_kucoin_socket(
                 &kucoin_private_socket_url,
-                &"",
+                &kucoin_market_for_pos_update,
                 &topic,
                 tx_kucoin_pos_change, // Sender channel of the appropriate type
                 |msg: &str| -> KucoinUserPosition {
-                    let kucoin_user_pos: KucoinUserPosition =
+                    let kucoin_user_pos: PositionChangeEvent =
                         serde_json::from_str(&msg).expect("Can't parse");
 
-                    kucoin_user_pos
+                        tracing::info!(
+                            kucoin_user_position=kucoin_user_pos.data.current_qty,
+                            lot_size=lot_size_for_user_pos_change,
+                            "Kucoin User Position");
+                        
+                    kucoin_user_pos.data
                 },
                 &"position.change",
                 true
