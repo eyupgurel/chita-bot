@@ -98,8 +98,6 @@ impl AccountStatistics for AccountStats{
 
         let topic = format!("/contractAccount/wallet");
         let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
-
-
         let _handle_kucoin_of = thread::spawn(move || {
             stream_kucoin_socket(
                 &kucoin_private_socket_url,
@@ -120,34 +118,7 @@ impl AccountStatistics for AccountStats{
         });
 
         loop {
-            // let tx_history = self.kucoin_client.get_transaction_history();
-            // let total_account_balance = <AccountStats as AccountStatistics>::process_transaction_history(&tx_history);
-
-            // let position_list = self.kucoin_client.get_position_list();
-
-            // let total_unrealised_pnl = <AccountStats as AccountStatistics>::sum_unrealised_pnl(&position_list);
-
-
-            // position_list.data.iter()
-            //     .for_each(|position| {
-            //         let bluefin_market =  <AccountStats as AccountStatistics>::get_bluefin_symbol(&self.config, &position.symbol);
-            //         match bluefin_market{
-            //             Some(value) => tracing::info!(market = value,
-            //                                                 current_qty=position.current_qty,
-            //                                                 pos_margin=position.pos_margin,
-            //                                                  unrealised_pnl= position.unrealised_pnl,
-            //                                                 "Kucoin Market Data"),
-            //             _ => {}
-            //         }
-
-            //     });
-
-            // tracing::info!(total_account_balance=total_account_balance,
-            //                total_unrealised_pnl=total_unrealised_pnl,
-            //                "Kucoin Account Data");
-
            
-
             match rx_kucoin_available_balance.try_recv() {
                 Ok(value) => {
                     let balance = value.1;

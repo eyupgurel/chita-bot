@@ -606,7 +606,8 @@ impl MarketMaker for MM {
                     let price = round_to_precision(top_ask.0, self.market.price_precision);
                     let quantity = top_ask.1;
 
-                    tracing::debug!("price: {} quantity: {}", price, quantity);
+                    tracing::info!("price: {} quantity: {}", price, quantity);
+                    tracing::info!("Attempting to market make...");
                     let ask_order_response =
                         self.kucoin_client
                             .place_limit_order(&bluefin_market, false, price, quantity);
