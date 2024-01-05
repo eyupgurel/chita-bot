@@ -31,6 +31,8 @@ pub fn get_kucoin_ticker_socket(
         &vars.kucoin_ticker_v2_socket_topic, market
     );
 
+    tracing::info!("Subscribing to kucoin ticker socket for market: {:?} and topic: {:?}", &market, &vars.kucoin_ticker_v2_socket_topic);
+
     // Send the message
     kucoin_ticker_socket
         .send(tungstenite::protocol::Message::Text(
@@ -93,24 +95,26 @@ pub fn stream_kucoin_ticker_socket(market: &str, tx: mpsc::Sender<(String, Ticke
                                 Some(parsed_kucoin_ticker.data.best_ask_price.clone());
                         }
 
-                        send_ping(&mut socket, &mut ack, 18, &mut last_ping_time);
+                        send_ping("Kucoin Ticker V2".to_string(),&mut socket, &mut ack, 18, &mut last_ping_time);
                     }
                     Message::Ping(ping_data) => {
                         // Handle the Ping message, e.g., by sending a Pong response
+                        tracing::info!("Ping message recieved from Kucoin Ticker V2");
                         socket.write(Message::Pong(ping_data)).unwrap();
                     }
+                    Message::Pong(_pong_data) => {
+                        send_ping(format!("Pong Kucoin Ticker V2"), &mut socket, &mut ack, 18, &mut last_ping_time);
+                    }
                     other => {
-                        tracing::error!("Error: Received unexpected message type: {:?}", other);
+                        tracing::error!("Error: Received unexpected message type in Kucoin Ticker V2 channel: {:?}", other);
                     }
                 }
             }
 
             Err(e) => {
-                tracing::error!("Error during message handling: {:?}", e);
-                let (mut new_kucoin_socket, mut new_ack) =
-                    get_kucoin_ticker_socket(market, &get_kucoin_url());
-                std::mem::swap(&mut socket, &mut new_kucoin_socket);
-                std::mem::swap(&mut ack, &mut new_ack);
+                tracing::error!("Error during Kucoin ticker V2 socket message handling with error: {:?}", e);
+                (socket, ack) = get_kucoin_ticker_socket(market, &get_kucoin_url());                    
+                tracing::info!("Resubscribed to Kucoin ticker V2 socket.");
                 continue;
             }
         }

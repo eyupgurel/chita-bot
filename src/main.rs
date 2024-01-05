@@ -61,7 +61,6 @@ fn main() {
             tx_account_data_kc, 
             tx_hedger,
             rx_bluefin_hedger_ob,
-            rx_bluefin_hedger_ob_diff,
         ) = MM::new(market.clone(), config.circuit_breaker_config.clone());
 
         let mm_handle = thread::spawn(move || {
@@ -84,8 +83,8 @@ fn main() {
                 market_clone_for_hgr.clone(), 
                 config.circuit_breaker_config.clone(), 
                 tx_hedger, 
-                rx_bluefin_hedger_ob, 
-                rx_bluefin_hedger_ob_diff).connect();
+                rx_bluefin_hedger_ob
+            ).connect();
         });
 
         mm_handles.push(mm_handle);

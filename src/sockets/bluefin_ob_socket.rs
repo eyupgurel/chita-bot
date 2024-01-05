@@ -31,7 +31,6 @@ where
 {
     fn get_ob_socket(&self, url: &str, market: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
         let (mut socket, _response) = connect(Url::parse(url).unwrap()).expect("Can't connect.");
-        tracing::info!("Connected to Bluefin stream at url:{}.", &url);
         // Construct the message
         let sub_message = json!([
             "SUBSCRIBE",
@@ -44,12 +43,18 @@ where
         ]);
 
         // Send the message
-        socket.send(Message::Text(sub_message.to_string())).unwrap();
+        let connect_status = socket.send(Message::Text(sub_message.to_string()));
+        if connect_status.is_err() {
+            tracing::error!("Error subscribing to Bluefin OrderBook websocket room");
+        }
 
         let read = socket.read().expect("Error reading message");
 
         let _ack_msg = match read {
-            Message::Text(s) => s,
+            Message::Text(s) => {
+                tracing::info!("Connected to Bluefin stream at url:{} with Ack message {}.", &url, &s);
+                s
+            },
             _ => {
                 panic!("Error getting text");
             }
@@ -70,7 +75,7 @@ where
         let mut last_first_ask_price: Option<f64> = None;
         let mut last_first_bid_price: Option<f64> = None;
 
-        loop {
+        loop { 
             let read = socket.read();
 
             match read {
@@ -113,20 +118,33 @@ where
                                 // Send the order book through the channel
                                 tx_diff.send(ob.clone()).unwrap();
                             }
+
+                            // tx_diff.send(ob.clone()).unwrap();
                             tx.send(ob).unwrap();
                         }
                         Message::Ping(ping_data) => {
+                            tracing::debug!("Recieved Ping message from Bluefin OB channel, sending back Pong...");
                             // Handle the Ping message, e.g., by sending a Pong response
                             socket.write(Message::Pong(ping_data)).unwrap();
                         }
+                        Message::Pong(pong_data) => {
+                            tracing::debug!("Recieved Pong message from Bluefin OB channel, sending back Ping...");
+                            // Handle the Ping message, e.g., by sending a Pong response
+                            socket.write(Message::Ping(pong_data)).unwrap();
+                        }
                         other => {
-                            tracing::error!("Error: Received unexpected message type: {:?}", other);
+                            tracing::error!(bluefin_ob_socket_unexpected_disconnect = format!("Error: Received unexpected message type: {:?}. Reconnecting to websocket...", other));
+                            socket = self.get_ob_socket(url, market);
+                            tracing::info!(bluefin_ob_socket_unexpected_reconnect = "Reconnecting to Bluefin OB websocket ...");
+                            continue;
                         }
                     }
                 }
                 Err(e) => {
-                    tracing::error!("Error during message handling: {:?}", e);
+                    tracing::error!(bluefin_ob_socket_disconnect = format!("Error during Bluefin OrderBook socket message handling: {:?}", e));
                     socket = self.get_ob_socket(url, market);
+                    tracing::info!(bluefin_ob_socket_resubscribe = "Resubscribed to Bluefin OrderBook socket.");
+                    continue;
                 }
             }
         }

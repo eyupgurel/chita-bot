@@ -34,15 +34,19 @@ pub fn get_kucoin_url() -> String {
 }
 
 pub fn send_ping(
+    name: String,
     kucoin_socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     ack: &mut Comm,
     skip_duration: u64,
     last_ping_time: &mut std::time::Instant,
 ) {
     if last_ping_time.elapsed() >= std::time::Duration::from_secs(skip_duration) {
+        tracing::debug!("Sending ping to Kucoin from socket {}...", &name);
+
         let ping = Comm {
             id: ack.id.clone(),
             type_: "ping".to_string(),
+            data: None,
         };
         kucoin_socket
             .send(tungstenite::Message::Text(

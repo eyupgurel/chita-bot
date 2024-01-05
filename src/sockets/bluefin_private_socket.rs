@@ -12,26 +12,39 @@ fn get_private_bluefin_socket(
     auth_token: &str,
 ) -> WebSocket<MaybeTlsStream<TcpStream>> {
     let (mut socket, _response) = connect(Url::parse(url).unwrap()).expect("Can't connect.");
-    tracing::info!("Connected to Bluefin stream at url:{}.", &url);
-
     // Construct the message
     let sub_message = json!([
         "SUBSCRIBE",
         [
             {
                 "e": "userUpdates",
-                "rt": "",
                 "t": auth_token
             }
         ]
     ]);
 
     // Send the message
-    socket
-        .send(tungstenite::protocol::Message::Text(
+    let connection_status = socket.send(
+        tungstenite::protocol::Message::Text(
             sub_message.to_string(),
-        ))
-        .unwrap();
+        )
+    );
+
+    if connection_status.is_err() {
+        tracing::error!("Error subscribing to Bluefin userUpdates websocket room");
+    }
+
+    let read = socket.read().expect("Error reading message");
+
+    let _ack_msg = match read {
+        Message::Text(s) => {
+            tracing::info!("Connected to Bluefin stream at url:{} with Ack message {}.", &url, &s);
+            s
+        },
+        _ => {
+            panic!("Error getting text");
+        }
+    };
 
     return socket;
 }
@@ -48,7 +61,7 @@ pub fn stream_bluefin_private_socket<T, F>(
     F: Fn(&str) -> T,
 {
     let mut socket = get_private_bluefin_socket(url, _market, auth_token);
-
+    tracing::info!("Subscribing to bluefin socket with indicator: {:?}", &indicator);
     loop {
         let read = socket.read();
 
@@ -63,19 +76,28 @@ pub fn stream_bluefin_private_socket<T, F>(
                         tx.send(data).unwrap();
                     }
                     Message::Ping(ping_data) => {
+                        tracing::debug!("Recieved Ping message from Bluefin for indicator: {:?}, sending back Pong...", &indicator);
                         // Handle the Ping message, e.g., by sending a Pong response
                         socket.write(Message::Pong(ping_data)).unwrap();
                     }
+                    Message::Pong(pong_data) => {
+                        tracing::debug!("Recieved Pong message from Bluefin for indicator: {:?}, sending back Ping...", &indicator);
+                        // Handle the Ping message, e.g., by sending a Pong response
+                        socket.write(Message::Ping(pong_data)).unwrap();
+                    }
                     other => {
-                        tracing::error!("Error: Received unexpected message type: {:?}", other);
+                        tracing::error!(bluefin_private_socket_unexpected_message = format!("Error: Received unexpected message type: {:?}. Reconnecting to websocket...", other));
+                        socket = get_private_bluefin_socket(url, _market, auth_token);
+                        tracing::info!(bluefin_private_socket_unexpected_reconnect = format!("Reconnecting to websocket {:?} ...", &indicator));
+                        continue;
                     }
                 }
             }
 
             Err(e) => {
-                tracing::error!("Error during message handling: {:?}", e);
-                let mut new_socket = get_private_bluefin_socket(url, _market, auth_token);
-                std::mem::swap(&mut socket, &mut new_socket);
+                tracing::error!(bluefin_private_socket_disconnect = format!("Error during Bluefin private socket message handling for topic: {:?}, with error: {:?}", &indicator, e));
+                socket = get_private_bluefin_socket(url, _market, auth_token);
+                tracing::info!(bluefin_private_socket_reconnect = format!("Resubscribed to Bluefin private socket for topic {}.", &indicator));
                 continue;
             }
         }

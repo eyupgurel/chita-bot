@@ -23,6 +23,9 @@ pub struct EnvVars {
     pub dry_run: bool,
     pub market_making_trigger_bps: f64,
     pub market_making_time_throttle_period: u64,
+    pub periodic_hedging_enabled: bool,
+    pub periodic_hedging_period: f64,
+
     pub log_level: String,
 }
 
@@ -89,6 +92,16 @@ pub fn env_variables() -> EnvVars {
         .parse::<u64>()
         .unwrap();
 
+    let periodic_hedging_enabled = std::env::var("PERIODIC_HEDGING_ENABLED")
+        .expect("PERIODIC_HEDGING_ENABLED be set.")
+        .parse::<bool>()
+        .unwrap();
+
+    let periodic_hedging_period = std::env::var("PERIODIC_HEDGING_PERIOD")
+        .expect("PERIODIC_HEDGING_PERIOD be set.")
+        .parse::<f64>()
+        .unwrap();
+
     // misc
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
 
@@ -111,6 +124,8 @@ pub fn env_variables() -> EnvVars {
         dry_run,
         market_making_trigger_bps,
         market_making_time_throttle_period,
+        periodic_hedging_enabled,
+        periodic_hedging_period,
         log_level,
     };
 }

@@ -29,6 +29,32 @@ pub struct UserPosition {
     pub leverage: u128,
 }
 
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchedOrder {
+    pub fill_price: f64,
+    pub quantity: f64
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderSettlementUpdate {
+    pub event: String,
+    pub user_address: String,
+    pub message: String,
+    pub order_hash: String,
+    pub order_quantity: u128,
+    pub quantity_sent_for_settlement: u128,
+    pub symbol: String,
+    pub timestamp: u128,
+    pub is_maker: bool,
+    pub is_buy: bool,
+    pub avg_fill_price: u128,
+    pub fill_id: String,
+    pub matched_orders: Option<Vec<MatchedOrder>>
+}
+
 #[derive(Debug, Clone)]
 pub struct Wallet {
     pub signing_key: SigningKey,
@@ -46,6 +72,56 @@ pub struct OrderUpdate {
     pub quantity: u128,
     pub open_qty: u128,
     pub avg_fill_price: u128
+}
+
+pub fn parse_order_settlement_update(v: Value) -> OrderSettlementUpdate {
+    let event: String = serde_json::from_str(&v["event"].to_string()).unwrap();
+    let user_address: String = serde_json::from_str(&v["userAddress"].to_string()).unwrap();
+    let message: String = serde_json::from_str(&v["message"].to_string()).unwrap();
+    let order_hash: String = serde_json::from_str(&v["orderHash"].to_string()).unwrap();
+    let order_quantity_str: String = serde_json::from_str(&v["orderQuantity"].to_string()).unwrap();
+    let order_quantity: u128 = order_quantity_str.parse::<u128>().unwrap();
+    let quantity_sent_for_settlement_str: String = serde_json::from_str(&v["quantitySentForSettlement"].to_string()).unwrap();
+    let quantity_sent_for_settlement: u128 = quantity_sent_for_settlement_str.parse::<u128>().unwrap();
+    let symbol: String = serde_json::from_str(&v["symbol"].to_string()).unwrap();
+    let timestamp: u128 = serde_json::from_str(&v["timestamp"].to_string()).unwrap();
+    let is_maker: bool = serde_json::from_str(&v["isMaker"].to_string()).unwrap();
+    let is_buy: bool = serde_json::from_str(&v["isBuy"].to_string()).unwrap();
+    let avg_fill_price_str: String = serde_json::from_str(&v["avgFillPrice"].to_string()).unwrap();
+    let avg_fill_price: u128 = avg_fill_price_str.parse::<u128>().unwrap();
+    let fill_id: String = serde_json::from_str(&v["fillId"].to_string()).unwrap();
+    let matched_orders = None; //TODO: read this later
+
+    return OrderSettlementUpdate {
+        event,
+        user_address,
+        message,
+        order_hash,
+        order_quantity,
+        quantity_sent_for_settlement,
+        symbol,
+        timestamp,
+        is_maker,
+        is_buy,
+        avg_fill_price,
+        fill_id,
+        matched_orders
+    };
+    
+    
+    // pub event: String,
+    // pub user_address: String,
+    // pub message: String,
+    // pub order_hash: String,
+    // pub order_quantity: String, //f64
+    // pub quantity_sent_for_settlement: String, //f64
+    // pub symbol: String,
+    // pub timestamp: u128,
+    // pub is_maker: bool,
+    // pub is_buy: bool,
+    // pub avg_fill_price: String,
+    // pub fill_id: String,
+    // pub matched_orders: Vec<MatchedOrder>,
 }
 
 pub fn parse_order_update(v: Value) -> OrderUpdate {
