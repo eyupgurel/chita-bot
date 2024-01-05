@@ -532,17 +532,17 @@ impl MarketMaker for MM {
 
         let mut mm_bid_prices = subtract(&mm_mid_price, &half_spread);
 
-        if kucoin_quantity > 0.0
-        {
-            mm_bid_prices = subtract(&mm_mid_price, &half_spread);
-        }
+        // if kucoin_quantity > 0.0
+        // {
+        //     mm_bid_prices = subtract(&mm_mid_price, &half_spread);
+        // }
 
         let mut mm_ask_prices = add(&mm_mid_price, &half_spread);
 
-        if kucoin_quantity < 0.0
-        {
-            mm_ask_prices = add(&mm_mid_price, &half_spread);
-        }
+        // if kucoin_quantity < 0.0
+        // {
+        //     mm_ask_prices = add(&mm_mid_price, &half_spread);
+        // }
 
         let mm_bid_sizes = tkr_book.bid_shift(shift);
         let mm_ask_sizes = tkr_book.ask_shift(shift);
