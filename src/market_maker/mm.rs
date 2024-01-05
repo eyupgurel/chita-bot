@@ -607,11 +607,13 @@ impl MarketMaker for MM {
                     let quantity = top_ask.1;
 
                     tracing::info!("price: {} quantity: {}", price, quantity);
-                    tracing::info!("Attempting to market make...");
+                    tracing::info!("Attempting to market make... is_buy=false");
                     let ask_order_response =
                         self.kucoin_client
                             .place_limit_order(&bluefin_market, false, price, quantity);
                     self.kucoin_ask_order_response = ask_order_response;
+
+                    tracing::info!("Placed bid limit order on market maker.");
                 }
             }
             if !are_bids_empty {
@@ -621,12 +623,14 @@ impl MarketMaker for MM {
                     let price = round_to_precision(top_bid.0, self.market.price_precision);
                     let quantity = top_bid.1;
 
-                    tracing::debug!("price: {} quantity: {}", price, quantity);
-
+                    tracing::info!("price: {} quantity: {}", price, quantity);
+                    tracing::info!("Attempting to market make... is_buy=true");
                     let bid_order_response =
                         self.kucoin_client
                             .place_limit_order(&bluefin_market, true, price, quantity);
                     self.kucoin_bid_order_response = bid_order_response;
+
+                    tracing::info!("Placed ask limit order on market maker.");
                 }
             }
         }
