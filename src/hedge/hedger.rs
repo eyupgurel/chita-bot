@@ -273,7 +273,7 @@ impl Hedger for HGR {
 
             match rx_kucoin_pos_change.try_recv() {
                 Ok(value) => {
-                    tracing::debug!("kucoin position update: {:?}", value.1);
+                    tracing::info!("kucoin position update: {:?}", value.1);
                     kucoin_pos_update_disconnect_breaker.on_success();
                     self.hedge(dry_run, value.1, ob_map.get(&bluefin));
                 }
@@ -281,7 +281,7 @@ impl Hedger for HGR {
                     
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::debug!("Kucoin position update worker has disconnected!");
+                    tracing::info!("Kucoin position update worker has disconnected!");
                     if !kucoin_pos_update_disconnect_breaker.is_open() {
                         kucoin_pos_update_disconnect_breaker.on_failure();
                     }
