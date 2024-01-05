@@ -80,11 +80,9 @@ pub fn stream_kucoin_socket<T, F>(
     let (mut socket, mut ack) = get_kucoin_socket(url, market, topic, is_private);
     let mut last_ping_time = std::time::Instant::now();
     loop {
-        tracing::info!("Attempting to read kucoin socket message...");
         let read = socket.read();
         match read {
             Ok(message) => {
-                tracing::info!("Kucoin socket message read ok: {}", message);
                 match message {
                     Message::Text(msg) => {
                         // Skip the indicator check if indicator is empty
