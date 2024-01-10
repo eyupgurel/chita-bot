@@ -218,6 +218,7 @@ pub mod client {
                     avg_entry_price: 0,
                     margin: 0,
                     leverage: 0,
+                    unrealized_profit: 0
                 };
             };
         }
