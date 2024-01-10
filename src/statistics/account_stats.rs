@@ -15,7 +15,8 @@ use bigdecimal::{FromPrimitive, ToPrimitive};
 use serde_json::Value;
 use crate::bluefin::models::parse_user_trade_order_update;
 use rust_decimal::Decimal;
-
+use std::time::Duration;
+use std::time::Instant;
 
 static ACCOUNT_STATS_PERIOD_DURATION: u64 = 3;
 
@@ -169,6 +170,9 @@ impl AccountStatistics for AccountStats{
             );
         });
 
+
+        let last_account_balance_check = Instant::now();
+
         loop {
 
             match rx_bluefin_trade_order_update.try_recv() {
@@ -191,11 +195,13 @@ impl AccountStatistics for AccountStats{
                 Ok(value) => {
                     let balance = value.1;
                     tracing::info!("Kucoin Available Balance: {:?}", balance);
-                    let _ = self.v_tx_account_data_kc.iter()
+                    if last_account_balance_check.elapsed() >= Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION) {
+                        let _ = self.v_tx_account_data_kc.iter()
                         .try_for_each(|sender| {
                             let clone = balance.clone();
                             sender.send(clone)
                         });
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -208,11 +214,13 @@ impl AccountStatistics for AccountStats{
             match rx_bluefin_account_data_update.try_recv() {
                 Ok(value) => {
                     tracing::info!("Bluefin AccountData: {:?}", value);
-                    let _ = self.v_tx_account_data.iter()
+                    if last_account_balance_check.elapsed() >= Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION) {
+                        let _ = self.v_tx_account_data.iter()
                         .try_for_each(|sender| {
                             let clone = value.clone();
                             sender.send(clone)
                         });
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from bluefin yet
@@ -221,9 +229,6 @@ impl AccountStatistics for AccountStats{
                     tracing::info!("Bluefin AccountData socket has disconnected!");
                 }
             }
-
-            // thread::sleep(Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION));
-
         }
     }
 
