@@ -67,6 +67,8 @@ impl AccountStatistics for AccountStats{
         let vars: EnvVars = env::env_variables();
         let (tx_bluefin_account_data_update, rx_bluefin_account_data_update) = mpsc::channel();
         let (tx_kucoin_available_balance, rx_kucoin_available_balance) = mpsc::channel();
+        let (tx_bluefin_trade_order_update, rx_bluefin_trade_order_update) = mpsc::channel();
+
 
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
@@ -96,6 +98,27 @@ impl AccountStatistics for AccountStats{
                 },
             );
         });
+
+        let bluefin_auth_token = self.bluefin_client.auth_token.clone();
+        let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
+        let _handle_bluefin_account_data_update = thread::spawn(move || {
+            stream_bluefin_private_socket(
+                &bluefin_websocket_url,
+                &"",
+                &bluefin_auth_token,
+                "UserTrade",
+                tx_bluefin_trade_order_update, // Sender channel of the appropriate type
+                |msg: &str| -> TransactionHistory {
+                    tracing::info!("User Trade: {}", msg);
+
+                    let user_trade = serde_json::from_str(&msg).expect("Can't read User Trade"); 
+
+                    
+                    user_trade
+                },
+            );
+        });
+
 
 
         let topic = format!("/contractAccount/wallet");
@@ -157,7 +180,7 @@ impl AccountStatistics for AccountStats{
                 }
             }
 
-            thread::sleep(Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION));
+            // thread::sleep(Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION));
 
         }
     }
