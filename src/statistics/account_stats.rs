@@ -1,7 +1,7 @@
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
-use std::time::Duration;
+use crate::bluefin::models::TradeOrderUpdate;
 use crate::bluefin::{AccountData, AccountUpdateEventData, BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
@@ -10,6 +10,8 @@ use crate::models::common::Config;
 use crate::models::kucoin_models::PositionList;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
+use serde_json::Value;
+use crate::bluefin::models::parse_user_trade_order_update;
 
 
 static ACCOUNT_STATS_PERIOD_DURATION: u64 = 3;
@@ -26,10 +28,16 @@ pub struct AccountStats {
     config: Config,
     v_tx_account_data: Vec<Sender<AccountData>>,
     v_tx_account_data_kc: Vec<Sender<AvailableBalance>>,
+    v_tx_account_data_bluefin_user_trade: Vec<Sender<TradeOrderUpdate>>,
 }
 
 impl AccountStats {
-    pub fn new(config: Config, v_tx_account_data: Vec<Sender<AccountData>>, v_tx_account_data_kc: Vec<Sender<AvailableBalance>>) -> AccountStats {
+    pub fn new(
+        config: Config, 
+        v_tx_account_data: Vec<Sender<AccountData>>,
+        v_tx_account_data_kc: Vec<Sender<AvailableBalance>>,
+        v_tx_account_data_bluefin_user_trade: Vec<Sender<TradeOrderUpdate>>) -> AccountStats {
+        
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -57,7 +65,8 @@ impl AccountStats {
             kucoin_client,
             config,
             v_tx_account_data,
-            v_tx_account_data_kc
+            v_tx_account_data_kc,
+            v_tx_account_data_bluefin_user_trade
         }
     }
 }
@@ -108,12 +117,18 @@ impl AccountStatistics for AccountStats{
                 &bluefin_auth_token,
                 "UserTrade",
                 tx_bluefin_trade_order_update, // Sender channel of the appropriate type
-                |msg: &str| -> TransactionHistory {
+                |msg: &str| -> TradeOrderUpdate {
                     tracing::info!("User Trade: {}", msg);
 
-                    let user_trade = serde_json::from_str(&msg).expect("Can't read User Trade"); 
+                    let v: Value = serde_json::from_str(&msg).unwrap();
+                    let user_trade: TradeOrderUpdate = parse_user_trade_order_update(serde_json::from_value(v["data"]["trade"].clone()).unwrap());
 
-                    
+                    tracing::info!(
+                        bluefin_market=user_trade.symbol,
+                        bluefin_commission_fee=user_trade.commission,
+                        "Bluefin User Trade"
+                    );
+
                     user_trade
                 },
             );
@@ -144,6 +159,22 @@ impl AccountStatistics for AccountStats{
         });
 
         loop {
+
+            match rx_bluefin_trade_order_update.try_recv() {
+                Ok(value) => {
+                    let _ = self.v_tx_account_data_bluefin_user_trade.iter()
+                        .try_for_each(|sender| {
+                            let clone = value.clone();
+                            sender.send(clone)
+                        });
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from kucoin yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::info!("Bluefin UserTrade socket has disconnected!");
+                }
+            }
            
             match rx_kucoin_available_balance.try_recv() {
                 Ok(value) => {

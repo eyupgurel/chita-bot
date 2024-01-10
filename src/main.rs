@@ -25,6 +25,7 @@ use env::EnvVars;
 use kucoin::AvailableBalance;
 use crate::bluefin::AccountData;
 use crate::statistics::account_stats::{AccountStatistics, AccountStats};
+use crate::bluefin::TradeOrderUpdate;
 
 fn main() {
     // Set a custom global panic hook
@@ -49,6 +50,7 @@ fn main() {
 
     let mut v_tx_account_data: Vec<Sender<AccountData>> = Vec::new();
     let mut v_tx_account_data_kc: Vec<Sender<AvailableBalance>> = Vec::new();
+    let mut v_tx_account_data_bluefin_user_trade: Vec<Sender<TradeOrderUpdate>> = Vec::new();
     let mut mm_handles: Vec<JoinHandle<()>> = Vec::new();
     let mut statistic_handles: Vec<JoinHandle<()>> = Vec::new();
     let mut hgr_handles: Vec<JoinHandle<()>> = Vec::new();
@@ -61,6 +63,7 @@ fn main() {
             tx_account_data_kc, 
             tx_hedger,
             rx_bluefin_hedger_ob,
+            tx_account_data_bluefin_user_trade,
         ) = MM::new(market.clone(), config.circuit_breaker_config.clone());
 
         let mm_handle = thread::spawn(move || {
@@ -75,6 +78,7 @@ fn main() {
 
         v_tx_account_data.push(tx_account_data);
         v_tx_account_data_kc.push(tx_account_data_kc);
+        v_tx_account_data_bluefin_user_trade.push(tx_account_data_bluefin_user_trade);
 
         let market_clone_for_hgr = market.clone(); // Clone market again for the hedger thread
 
@@ -95,7 +99,7 @@ fn main() {
 
 
     let account_stats_handle = thread::spawn(move || {
-        AccountStats::new(config, v_tx_account_data, v_tx_account_data_kc).log();
+        AccountStats::new(config, v_tx_account_data, v_tx_account_data_kc, v_tx_account_data_bluefin_user_trade).log();
     });
 
     let mut combined_handles = mm_handles;

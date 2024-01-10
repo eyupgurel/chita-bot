@@ -37,6 +37,14 @@ pub struct MatchedOrder {
     pub quantity: f64
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TradeOrderUpdate {
+    pub symbol: String,
+    pub commission: u128
+}
+
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OrderSettlementUpdate {
@@ -74,6 +82,18 @@ pub struct OrderUpdate {
     pub avg_fill_price: u128
 }
 
+pub fn parse_user_trade_order_update(v: Value) -> TradeOrderUpdate {
+    let symbol: String = serde_json::from_str(&v["symbol"].to_string()).unwrap();
+    let commission_update_str: String = serde_json::from_str(&v["commission"].to_string()).unwrap();
+    let commission: u128 = commission_update_str.parse::<u128>().unwrap();
+
+    return TradeOrderUpdate {
+        symbol,
+        commission
+    };
+
+}
+
 pub fn parse_order_settlement_update(v: Value) -> OrderSettlementUpdate {
     let event: String = serde_json::from_str(&v["event"].to_string()).unwrap();
     let user_address: String = serde_json::from_str(&v["userAddress"].to_string()).unwrap();
@@ -107,21 +127,6 @@ pub fn parse_order_settlement_update(v: Value) -> OrderSettlementUpdate {
         fill_id,
         matched_orders
     };
-    
-    
-    // pub event: String,
-    // pub user_address: String,
-    // pub message: String,
-    // pub order_hash: String,
-    // pub order_quantity: String, //f64
-    // pub quantity_sent_for_settlement: String, //f64
-    // pub symbol: String,
-    // pub timestamp: u128,
-    // pub is_maker: bool,
-    // pub is_buy: bool,
-    // pub avg_fill_price: String,
-    // pub fill_id: String,
-    // pub matched_orders: Vec<MatchedOrder>,
 }
 
 pub fn parse_order_update(v: Value) -> OrderUpdate {

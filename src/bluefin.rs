@@ -1,11 +1,12 @@
 // modules
 mod client;
-mod models;
+pub mod models;
 mod orders;
 
 pub use crate::bluefin::client::client::BluefinClient;
 pub use crate::bluefin::models::UserPosition;
 pub use crate::bluefin::models::OrderSettlementUpdate;
+pub use crate::bluefin::models::TradeOrderUpdate;
 pub use crate::bluefin::models::OrderUpdate;
 pub use crate::bluefin::models::AccountData;
 pub use crate::bluefin::models::AccountUpdateEventData;
