@@ -130,9 +130,13 @@ impl AccountStatistics for AccountStats{
                         .div(Decimal::from_u128(1000000000000000000).unwrap());
                     let user_trade_display = user_trade_commission_dec.to_f64().unwrap();
 
+                    let realized_pnl_dec = Decimal::from_u128(user_trade.realized_pnl).unwrap()
+                    .div(Decimal::from_u128(1000000000000000000).unwrap());
+
                     tracing::info!(
                         bluefin_market=user_trade.symbol,
                         bluefin_commission_fee=user_trade_display,
+                        bluefin_realized_pnl = realized_pnl_dec.to_f64().unwrap(),
                         "Bluefin User Trade"
                     );
 

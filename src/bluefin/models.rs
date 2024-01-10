@@ -27,6 +27,7 @@ pub struct UserPosition {
     pub quantity: u128,
     pub margin: u128,
     pub leverage: u128,
+    pub unrealized_profit: u128,
 }
 
 
@@ -41,7 +42,8 @@ pub struct MatchedOrder {
 #[serde(rename_all = "camelCase")]
 pub struct TradeOrderUpdate {
     pub symbol: String,
-    pub commission: u128
+    pub commission: u128,
+    pub realized_pnl: u128,
 }
 
 
@@ -86,10 +88,14 @@ pub fn parse_user_trade_order_update(v: Value) -> TradeOrderUpdate {
     let symbol: String = serde_json::from_str(&v["symbol"].to_string()).unwrap();
     let commission_update_str: String = serde_json::from_str(&v["commission"].to_string()).unwrap();
     let commission: u128 = commission_update_str.parse::<u128>().unwrap();
+    
+    let realized_pnl_str: String = serde_json::from_str(&v["realizedPnl"].to_string()).unwrap();
+    let realized_pnl: u128 = realized_pnl_str.parse::<u128>().unwrap();
 
     return TradeOrderUpdate {
         symbol,
-        commission
+        commission,
+        realized_pnl
     };
 
 }
@@ -149,6 +155,9 @@ pub fn parse_user_position(position: Value) -> UserPosition {
     let margin_str: String = serde_json::from_str(&position["margin"].to_string()).unwrap();
     let leverage_str: String = serde_json::from_str(&position["leverage"].to_string()).unwrap();
     let side_str: String = serde_json::from_str(&position["side"].to_string()).unwrap();
+    
+    let unrealized_profit_str: String = serde_json::from_str(&position["unrealizedProfit"].to_string()).unwrap();
+    let unrealized_pnl: u128 = unrealized_profit_str.parse::<u128>().unwrap();
 
     return UserPosition {
         symbol: serde_json::from_str(&position["symbol"].to_string()).unwrap(),
@@ -157,6 +166,7 @@ pub fn parse_user_position(position: Value) -> UserPosition {
         avg_entry_price: ep_str.parse::<u128>().unwrap(),
         margin: margin_str.parse::<u128>().unwrap(),
         leverage: leverage_str.parse::<u128>().unwrap(),
+        unrealized_profit: unrealized_pnl,
     };
 }
 

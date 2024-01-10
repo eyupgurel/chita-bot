@@ -18,7 +18,7 @@ use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::ops::Add;
+use std::ops::{Add, Div};
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -214,10 +214,14 @@ impl Hedger for HGR {
                             quantity = quantity * Decimal::from_i128(-1).unwrap();
                         }
 
+                        let unrealized_pnl = Decimal::from_u128(user_position.unrealized_profit).unwrap()
+                            .div(Decimal::from_u128(BIGNUMBER_BASE).unwrap());
+
                         tracing::info!(
                             market = user_position.symbol,
                             bluefin_real_quantity = quantity.to_f64().unwrap(),
-                            "Bluefin Quantity"
+                            bluefin_unrealized_pnl = unrealized_pnl.to_f64().unwrap(),
+                            "Bluefin Position Update"
                         );
                     }
                     user_position
@@ -245,7 +249,9 @@ impl Hedger for HGR {
                     tracing::info!(
                         market = kucoin_user_pos.data.symbol,
                         kucoin_real_quantity = quantity.to_f64().unwrap(),
-                        "Kucoin Quantity"
+                        kucoin_unrealized_pnl = kucoin_user_pos.data.unrealised_pnl,
+                        kucoin_realized_pnl = kucoin_user_pos.data.realised_pnl,
+                        "Kucoin Position Update"
                     );
 
                     kucoin_user_pos.data
