@@ -85,6 +85,8 @@ where
                                 // Send the order book through the channel
                                 tx_diff.send(ob.clone()).unwrap();
                             }
+
+                            // tx_diff.send(ob.clone()).unwrap();
                             tx.send(ob).unwrap();
                         }
                         Message::Ping(ping_data) => {

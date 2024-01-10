@@ -2,7 +2,7 @@ pub mod client {
     use crate::env::EnvVars;
     use crate::{
         env,
-        kucoin::models::{CallResponse, UserPosition},
+        kucoin::models::CallResponse,
         utils,
     };
     #[allow(deprecated)]
@@ -19,7 +19,7 @@ pub mod client {
     type HmacSha256 = Hmac<Sha256>;
 
     use crate::kucoin::models::{Error, FillsResponse, Method, RecentFillsResponse, Response, TransactionHistory};
-    use crate::models::kucoin_models::PositionList;
+    use crate::models::kucoin_models::{PositionList, KucoinUserPosition};
 
     #[derive(Debug, Clone)]
     pub struct Credentials {
@@ -283,7 +283,7 @@ pub mod client {
             position_list
         }
 
-        pub fn get_position(&self, market: &str) -> Option<UserPosition> {
+        pub fn get_position(&self, market: &str) -> Option<KucoinUserPosition> {
             let endpoint = String::from("/api/v1/position");
             let market_symbol = self.markets.get(market).unwrap();
 
@@ -308,7 +308,7 @@ pub mod client {
             let value: Value = serde_json::from_str(&res).expect("JSON Decoding failed");
 
             if value["code"].to_string().eq("\"200000\"") {
-                let user_position: UserPosition =
+                let user_position: KucoinUserPosition =
                     serde_json::from_value(value["data"].clone()).unwrap();
 
                 tracing::debug!("Got position: {:#?}", user_position);

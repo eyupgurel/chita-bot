@@ -6,6 +6,8 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+static PERIOD_DURATION: u64 = 30;
+
 pub struct Stats {
     market: Market,
     kucoin_client: KuCoinClient,
@@ -72,11 +74,12 @@ impl Statistics for Stats {
                 buy_percent = buy_percent,
                 "Statistics"
             );
+
             self.tx_stats
                 .send(buy_percent)
                 .expect("Error in sending stats");
 
-            thread::sleep(Duration::from_secs(60));
+            thread::sleep(Duration::from_secs(PERIOD_DURATION));
         }
     }
 }

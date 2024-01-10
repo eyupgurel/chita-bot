@@ -273,10 +273,10 @@ pub struct AvailableBalance {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceData {
-    pub available_balance: f64,
-    pub hold_balance: f64,
+    pub available_balance: String, //actually f64
+    pub hold_balance: String, //actually f64
     pub currency: String,
-    pub timestamp: i64,
+    pub timestamp: String, //actually u64
 }
 
 #[cfg(test)]

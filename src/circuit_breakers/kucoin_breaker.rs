@@ -7,6 +7,7 @@ use crate::models::common::CircuitBreakerConfig;
 
 
 pub struct KuCoinBreaker {
+    pub name: String,
     pub client: KuCoinClient,
     pub env_vars: EnvVars
 }
@@ -36,9 +37,11 @@ impl KuCoinBreaker {
 
     }
 
-    pub fn new() -> KuCoinBreaker {
+    pub fn new(name: String) -> KuCoinBreaker {
         let vars= env::env_variables();
+        tracing::info!("Initializing Kucoin Client for Breaker: {}", &name);
         KuCoinBreaker {
+            name,
             client: KuCoinBreaker::client(
                 &vars.kucoin_api_key,
                 &vars.kucoin_api_secret,
@@ -93,6 +96,7 @@ mod test {
         let vars = env::env_variables();
 
         let mut breaker = KuCoinBreaker {
+            name: "Test Breaker".to_string(),
             client: KuCoinBreaker::client(
                 &vars.kucoin_api_key,
                 &vars.kucoin_api_secret,

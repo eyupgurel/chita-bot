@@ -1,6 +1,7 @@
 use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
 
 pub struct CancelAllOrdersCircuitBreaker {
+    pub name: String,
     pub circuit_breaker: CircuitBreakerBase
 }
 
@@ -50,6 +51,7 @@ mod test {
         });
 
         let mut breaker: CancelAllOrdersCircuitBreaker = CancelAllOrdersCircuitBreaker {
+            name: "Test Breaker".to_string(),
             circuit_breaker: CircuitBreakerBase {
                 config: CircuitBreakerConfig {
                     num_retries: 3,
@@ -58,7 +60,7 @@ mod test {
                 },
                 num_failures: 0,
                 state: State::Closed,
-                kucoin_breaker: KuCoinBreaker::new(),
+                kucoin_breaker: KuCoinBreaker::new("Kucoin Breaker for Test Breaker".to_string()),
                 market: "ETH-PERP".to_string(),
             }
         };
@@ -99,6 +101,7 @@ mod test {
         });
 
         let mut breaker: CancelAllOrdersCircuitBreaker = CancelAllOrdersCircuitBreaker {
+            name: "Test Breaker".to_string(),
             circuit_breaker: CircuitBreakerBase {
                 config: CircuitBreakerConfig {
                     num_retries: 3,
@@ -107,7 +110,7 @@ mod test {
                 },
                 num_failures: 0,
                 state: State::Closed,
-                kucoin_breaker: KuCoinBreaker::new(),
+                kucoin_breaker: KuCoinBreaker::new("Kucoin Breaker for Test Breaker".to_string()),
                 market: "ETH-PERP".to_string(),
             }
         };

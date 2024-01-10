@@ -9,9 +9,11 @@ use crate::kucoin::{AvailableBalance, Credentials, KuCoinClient, TransactionHist
 use crate::models::common::Config;
 use crate::models::kucoin_models::PositionList;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
-use crate::sockets::kucoin_ob_socket::stream_kucoin_socket;
+use crate::sockets::kucoin_socket::stream_kucoin_socket;
 
-static ACCOUNT_STATS_PERIOD_DURATION: u64 = 60;
+
+static ACCOUNT_STATS_PERIOD_DURATION: u64 = 3;
+
 pub trait AccountStatistics {
     fn log(&mut self);
     fn process_transaction_history(transaction_history: &TransactionHistory) -> f64;
@@ -98,9 +100,8 @@ impl AccountStatistics for AccountStats{
 
         let topic = format!("/contractAccount/wallet");
         let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
-
-
         let _handle_kucoin_of = thread::spawn(move || {
+            tracing::info!("Creating Kucoin Account Balance handler...");
             stream_kucoin_socket(
                 &kucoin_private_socket_url,
                 &"",
@@ -120,38 +121,11 @@ impl AccountStatistics for AccountStats{
         });
 
         loop {
-            // let tx_history = self.kucoin_client.get_transaction_history();
-            // let total_account_balance = <AccountStats as AccountStatistics>::process_transaction_history(&tx_history);
-
-            // let position_list = self.kucoin_client.get_position_list();
-
-            // let total_unrealised_pnl = <AccountStats as AccountStatistics>::sum_unrealised_pnl(&position_list);
-
-
-            // position_list.data.iter()
-            //     .for_each(|position| {
-            //         let bluefin_market =  <AccountStats as AccountStatistics>::get_bluefin_symbol(&self.config, &position.symbol);
-            //         match bluefin_market{
-            //             Some(value) => tracing::info!(market = value,
-            //                                                 current_qty=position.current_qty,
-            //                                                 pos_margin=position.pos_margin,
-            //                                                  unrealised_pnl= position.unrealised_pnl,
-            //                                                 "Kucoin Market Data"),
-            //             _ => {}
-            //         }
-
-            //     });
-
-            // tracing::info!(total_account_balance=total_account_balance,
-            //                total_unrealised_pnl=total_unrealised_pnl,
-            //                "Kucoin Account Data");
-
            
-
             match rx_kucoin_available_balance.try_recv() {
                 Ok(value) => {
                     let balance = value.1;
-                    tracing::info!("Kucoin Available Balance: {:?}", balance.data.available_balance);
+                    tracing::info!("Kucoin Available Balance: {:?}", balance);
                     let _ = self.v_tx_account_data_kc.iter()
                         .try_for_each(|sender| {
                             let clone = balance.clone();
@@ -162,7 +136,7 @@ impl AccountStatistics for AccountStats{
                     // No message from kucoin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::debug!("Kucoin AvailableBalance socket has disconnected!");
+                    tracing::info!("Kucoin AvailableBalance socket has disconnected!");
                 }
             }
 
@@ -179,11 +153,12 @@ impl AccountStatistics for AccountStats{
                     // No message from bluefin yet
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::debug!("Bluefin AccountData socket has disconnected!");
+                    tracing::info!("Bluefin AccountData socket has disconnected!");
                 }
             }
 
             thread::sleep(Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION));
+
         }
     }
 

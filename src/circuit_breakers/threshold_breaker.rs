@@ -7,6 +7,7 @@ use crate::models::common::CircuitBreakerConfig;
 use super::kucoin_breaker::KuCoinBreaker;
 
 pub struct ThresholdCircuitBreaker {
+    name: String,
     config: CircuitBreakerConfig,
     kucoin_breaker: KuCoinBreaker,
     kucoin_balance_stack: Vec<f64>, 
@@ -14,6 +15,8 @@ pub struct ThresholdCircuitBreaker {
 
     daily_base_balance: f64,
     prev_poll: DateTime<Utc>,
+
+    num_failures: u8,
 }
 
 pub enum ClientType {
@@ -23,15 +26,19 @@ pub enum ClientType {
 
 
 impl ThresholdCircuitBreaker {
-    pub fn new(config: CircuitBreakerConfig) -> ThresholdCircuitBreaker {
+    pub fn new(name: String, config: CircuitBreakerConfig) -> ThresholdCircuitBreaker {
+        tracing::info!("Creating Circuit Breaker {} for User Account Balance...", name);
         ThresholdCircuitBreaker {
+            name: name.clone(),
             config,
-            kucoin_breaker: KuCoinBreaker::new(),
+            kucoin_breaker: KuCoinBreaker::new(format!("Kucoin Breaker for {}", name)),
             kucoin_balance_stack: vec![],
             bluefin_balance_stack: vec![],
 
             daily_base_balance: -1.0,
             prev_poll: Utc::now(),
+
+            num_failures: 0,
     
         }
     }
@@ -61,22 +68,35 @@ impl ThresholdCircuitBreaker {
             let bf_balance = self.bluefin_balance_stack.pop().expect("Could not fetch balance from Bluefin account stats");
 
             let user_balance = bf_balance + kc_balance;
+            tracing::info!("Bluefin Balance: {}, Kucoin Balance: {}", bf_balance, kc_balance);
+            let critical_balance = self.daily_base_balance - (self.daily_base_balance * ({self.config.loss_threshold_bps as f64} /10_000.0));
+            let is_critical = !(user_balance >= critical_balance);   
+            if is_critical {
+                self.num_failures += 1;
+                tracing::info!("User balance is critically low {} compared to critical balance {}. Comparing with base balance {}. Cancelling all orders and shutting the bot down...", user_balance, critical_balance, self.daily_base_balance);
+            } else {
+                self.num_failures = 0;
+                tracing::debug!("User balance of {} is bigger than critically low balance {}. Continuing operations...", user_balance, critical_balance);
+            }
 
-            return !(user_balance >= self.daily_base_balance - (self.daily_base_balance * ({self.config.loss_threshold_bps as f64} /10_000.0)));   
+            let is_num_failures_reached = self.num_failures > self.config.failure_threshold;
+
+            return is_critical && is_num_failures_reached;
         }
         
         return false;
     }
 
     fn open_breaker(&mut self, market: &String, dry_run: bool) -> bool {
+        tracing::info!("Cancelling all orders on market maker...");
         self.kucoin_breaker.cancel_all_orders(&self.config, market, dry_run)
     }
 
     pub fn check_user_balance(&mut self, balance: f64, client_type: ClientType, market: &String, dry_run: bool) {
+        tracing::info!("Checking user balance...");
         self.push_balance(balance, client_type);
         self.cache_base_account_balance();
         if self.is_balance_critical() {
-            tracing::info!("User balance is critically low. Cancelling all orders and shutting the bot down...");
             self.open_breaker(market, dry_run);
             panic!("User balance critically low. Cancelling all orders and shutting the bot down to prevent further loss...");
         }
@@ -94,7 +114,7 @@ mod test {
             failure_threshold: 3,
             loss_threshold_bps: 3.0,
         };
-        let breaker = ThresholdCircuitBreaker::new(config);
+        let breaker = ThresholdCircuitBreaker::new("Test Breaker".to_string(), config);
 
         (config, breaker)
     }

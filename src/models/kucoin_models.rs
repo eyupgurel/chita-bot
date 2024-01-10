@@ -26,6 +26,7 @@ pub struct Comm {
     pub id: String,
     #[serde(rename = "type")]
     pub type_: String,
+    pub data: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -161,7 +162,7 @@ pub struct KucoinUserPosition {
     pub realised_pnl: f64,
     pub maint_margin: f64,
     pub real_leverage: f64,
-    pub change_reason: String, //changeReason:marginChange、positionChange、liquidation、autoAppendMarginStatusChange、adl
+    pub change_reason: Option<String>, //changeReason:marginChange、positionChange、liquidation、autoAppendMarginStatusChange、adl
     pub current_cost: f64,
     pub opening_timestamp: u64,
     pub current_qty: i128,
