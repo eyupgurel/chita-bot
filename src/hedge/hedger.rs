@@ -214,7 +214,7 @@ impl Hedger for HGR {
                             quantity = quantity * Decimal::from_i128(-1).unwrap();
                         }
 
-                        let unrealized_pnl = Decimal::from_u128(user_position.unrealized_profit).unwrap()
+                        let unrealized_pnl = Decimal::from_i128(user_position.unrealized_profit).unwrap()
                             .div(Decimal::from_u128(BIGNUMBER_BASE).unwrap());
 
                         tracing::info!(
