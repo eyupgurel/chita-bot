@@ -249,7 +249,7 @@ impl Hedger for HGR {
 
                     let avg_entry_price = Decimal::from_f64(kucoin_user_pos.data.avg_entry_price).unwrap();
 
-                    let volume = quantity.mul(avg_entry_price).to_f64().unwrap();
+                    let volume = quantity.mul(avg_entry_price).abs().to_f64().unwrap();
 
                     tracing::info!(
                         market = kucoin_user_pos.data.symbol,
