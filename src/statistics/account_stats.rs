@@ -125,7 +125,7 @@ impl AccountStatistics for AccountStats{
 
                     tracing::info!(
                         bluefin_market=user_trade.symbol,
-                        bluefin_commission_fee=user_trade.commission,
+                        bluefin_commission_fee=user_trade.commission / 1000000000000000000,
                         "Bluefin User Trade"
                     );
 
