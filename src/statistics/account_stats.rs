@@ -1,3 +1,4 @@
+use std::ops::Div;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -10,8 +11,10 @@ use crate::models::common::Config;
 use crate::models::kucoin_models::PositionList;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
+use bigdecimal::{FromPrimitive, ToPrimitive};
 use serde_json::Value;
 use crate::bluefin::models::parse_user_trade_order_update;
+use rust_decimal::Decimal;
 
 
 static ACCOUNT_STATS_PERIOD_DURATION: u64 = 3;
@@ -123,9 +126,13 @@ impl AccountStatistics for AccountStats{
                     let v: Value = serde_json::from_str(&msg).unwrap();
                     let user_trade: TradeOrderUpdate = parse_user_trade_order_update(serde_json::from_value(v["data"]["trade"].clone()).unwrap());
 
+                    let user_trade_commission_dec = Decimal::from_u128(user_trade.commission).unwrap()
+                        .div(Decimal::from_u128(1000000000000000000).unwrap());
+                    let user_trade_display = user_trade_commission_dec.to_f64().unwrap();
+
                     tracing::info!(
                         bluefin_market=user_trade.symbol,
-                        bluefin_commission_fee=user_trade.commission / 1000000000000000000,
+                        bluefin_commission_fee=user_trade_display,
                         "Bluefin User Trade"
                     );
 
