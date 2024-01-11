@@ -133,7 +133,8 @@ pub struct Position {
 #[serde(rename_all = "camelCase")]
 pub struct PositionList {
     pub code: String,
-    pub data: Vec<Position>,
+    pub msg: Option<String>,
+    pub data: Option<Vec<Position>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
