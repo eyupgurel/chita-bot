@@ -24,7 +24,8 @@ pub struct Data {
 #[derive(Deserialize, Debug)]
 pub struct Response {
     pub code: String,
-    pub data: Data,
+    pub msg: Option<String>,
+    pub data: Option<Data>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -173,14 +174,16 @@ pub struct PositionChangeData {
 #[serde(rename_all = "camelCase")]
 pub struct RecentFillsResponse {
     pub code: String,
-    pub data: Vec<Trade>,
+    pub msg: Option<String>,
+    pub data: Option<Vec<Trade>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FillsResponse {
     pub code: String,
-    pub data: FillsData,
+    pub msg: Option<String>,
+    pub data: Option<FillsData>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -245,7 +248,8 @@ pub struct TransactionData {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TransactionHistory {
     pub code: String,
-    pub data: TransactionData,
+    pub msg: Option<String>,
+    pub data: Option<TransactionData>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

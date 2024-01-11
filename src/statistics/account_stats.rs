@@ -22,8 +22,8 @@ static ACCOUNT_STATS_PERIOD_DURATION: u64 = 3;
 
 pub trait AccountStatistics {
     fn log(&mut self);
-    fn process_transaction_history(transaction_history: &TransactionHistory) -> f64;
-    fn sum_unrealised_pnl(position_list: &PositionList) -> f64;
+    // fn process_transaction_history(transaction_history: &TransactionHistory) -> f64;
+    // fn sum_unrealised_pnl(position_list: &PositionList) -> f64;
     fn get_bluefin_symbol(config: &Config, kucoin_symbol: &str) -> Option<String>;
 }
 pub struct AccountStats {
@@ -232,32 +232,33 @@ impl AccountStatistics for AccountStats{
         }
     }
 
-    fn process_transaction_history(transaction_history: &TransactionHistory) -> f64 {
-        // Extract the initial account equity from the first transaction, or default to 0 if empty
-        let initial_account_equity = transaction_history
-            .data
-            .data_list
-            .first()
-            .map_or(0.0, |t| t.account_equity);
+    // fn process_transaction_history(transaction_history: &TransactionHistory) -> f64 {
+    //     // Extract the initial account equity from the first transaction, or default to 0 if empty
+    //     let initial_account_equity = transaction_history
+    //         .data
+    //         .data_list
+    //         .first()
+    //         .map_or(0.0, |t| t.account_equity);
 
-        // Calculate the total amount using functional style
-        let total_amount: f64 = transaction_history
-            .data
-            .data_list
-            .iter()
-            .fold(0.0, |acc, t| acc + t.amount);
+    //     // Calculate the total amount using functional style
+    //     let total_amount: f64 = transaction_history
+    //         .data
+    //         .data_list
+    //         .iter()
+    //         .fold(0.0, |acc, t| acc + t.amount);
 
-        // Add the total amount to the initial account equity
-        initial_account_equity + total_amount
-    }
+    //     // Add the total amount to the initial account equity
+    //     initial_account_equity + total_amount
+    // }
 
-    fn sum_unrealised_pnl(position_list: &PositionList) -> f64 {
-        position_list
-            .data
-            .iter()
-            .map(|position| position.unrealised_pnl)
-            .sum()
-    }
+    // fn sum_unrealised_pnl(position_list: &PositionList) -> f64 {
+    //     position_list
+    //         .data
+    //         .unwrap()
+    //         .iter()
+    //         .map(|position| position.unrealised_pnl)
+    //         .sum()
+    // }
 
     fn get_bluefin_symbol(config: &Config, kucoin_symbol: &str) -> Option<String> {
         for market in &config.markets {
