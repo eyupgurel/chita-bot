@@ -257,6 +257,7 @@ impl Hedger for HGR {
                         kucoin_volume = volume,
                         kucoin_unrealized_pnl = kucoin_user_pos.data.unrealised_pnl,
                         kucoin_realized_pnl = kucoin_user_pos.data.realised_pnl,
+                        kucoin_gross_realized_pnl = kucoin_user_pos.data.realised_gross_pnl,
                         "Kucoin Position Update"
                     );
 
