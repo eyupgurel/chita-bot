@@ -1,7 +1,8 @@
+use std::ops::Div;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
-use std::time::Duration;
+use crate::bluefin::models::TradeOrderUpdate;
 use crate::bluefin::{AccountData, AccountUpdateEventData, BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
@@ -10,7 +11,12 @@ use crate::models::common::Config;
 use crate::models::kucoin_models::PositionList;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
-
+use bigdecimal::{FromPrimitive, ToPrimitive};
+use serde_json::Value;
+use crate::bluefin::models::parse_user_trade_order_update;
+use rust_decimal::Decimal;
+use std::time::Duration;
+use std::time::Instant;
 
 static ACCOUNT_STATS_PERIOD_DURATION: u64 = 3;
 
@@ -26,10 +32,16 @@ pub struct AccountStats {
     config: Config,
     v_tx_account_data: Vec<Sender<AccountData>>,
     v_tx_account_data_kc: Vec<Sender<AvailableBalance>>,
+    v_tx_account_data_bluefin_user_trade: Vec<Sender<TradeOrderUpdate>>,
 }
 
 impl AccountStats {
-    pub fn new(config: Config, v_tx_account_data: Vec<Sender<AccountData>>, v_tx_account_data_kc: Vec<Sender<AvailableBalance>>) -> AccountStats {
+    pub fn new(
+        config: Config, 
+        v_tx_account_data: Vec<Sender<AccountData>>,
+        v_tx_account_data_kc: Vec<Sender<AvailableBalance>>,
+        v_tx_account_data_bluefin_user_trade: Vec<Sender<TradeOrderUpdate>>) -> AccountStats {
+        
         let vars: EnvVars = env::env_variables();
 
         let bluefin_client = BluefinClient::new(
@@ -57,7 +69,8 @@ impl AccountStats {
             kucoin_client,
             config,
             v_tx_account_data,
-            v_tx_account_data_kc
+            v_tx_account_data_kc,
+            v_tx_account_data_bluefin_user_trade
         }
     }
 }
@@ -67,6 +80,8 @@ impl AccountStatistics for AccountStats{
         let vars: EnvVars = env::env_variables();
         let (tx_bluefin_account_data_update, rx_bluefin_account_data_update) = mpsc::channel();
         let (tx_kucoin_available_balance, rx_kucoin_available_balance) = mpsc::channel();
+        let (tx_bluefin_trade_order_update, rx_bluefin_trade_order_update) = mpsc::channel();
+
 
         let bluefin_auth_token = self.bluefin_client.auth_token.clone();
         let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
@@ -97,6 +112,41 @@ impl AccountStatistics for AccountStats{
             );
         });
 
+        let bluefin_auth_token = self.bluefin_client.auth_token.clone();
+        let bluefin_websocket_url = vars.bluefin_websocket_url.clone();
+        let _handle_bluefin_account_data_update = thread::spawn(move || {
+            stream_bluefin_private_socket(
+                &bluefin_websocket_url,
+                &"",
+                &bluefin_auth_token,
+                "UserTrade",
+                tx_bluefin_trade_order_update, // Sender channel of the appropriate type
+                |msg: &str| -> TradeOrderUpdate {
+                    tracing::info!("User Trade: {}", msg);
+
+                    let v: Value = serde_json::from_str(&msg).unwrap();
+                    let user_trade: TradeOrderUpdate = parse_user_trade_order_update(serde_json::from_value(v["data"]["trade"].clone()).unwrap());
+
+                    let user_trade_commission_dec = Decimal::from_u128(user_trade.commission).unwrap()
+                        .div(Decimal::from_u128(1000000000000000000).unwrap());
+                    let user_trade_display = user_trade_commission_dec.to_f64().unwrap();
+
+                    let realized_pnl_dec = Decimal::from_i128(user_trade.realized_pnl).unwrap()
+                    .div(Decimal::from_u128(1000000000000000000).unwrap());
+
+                    tracing::info!(
+                        bluefin_market=user_trade.symbol,
+                        bluefin_commission_fee=user_trade_display,
+                        bluefin_realized_pnl = realized_pnl_dec.to_f64().unwrap(),
+                        "Bluefin User Trade"
+                    );
+
+                    user_trade
+                },
+            );
+        });
+
+
 
         let topic = format!("/contractAccount/wallet");
         let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
@@ -120,17 +170,38 @@ impl AccountStatistics for AccountStats{
             );
         });
 
+
+        let last_account_balance_check = Instant::now();
+
         loop {
+
+            match rx_bluefin_trade_order_update.try_recv() {
+                Ok(value) => {
+                    let _ = self.v_tx_account_data_bluefin_user_trade.iter()
+                        .try_for_each(|sender| {
+                            let clone = value.clone();
+                            sender.send(clone)
+                        });
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from kucoin yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::info!("Bluefin UserTrade socket has disconnected!");
+                }
+            }
            
             match rx_kucoin_available_balance.try_recv() {
                 Ok(value) => {
                     let balance = value.1;
                     tracing::info!("Kucoin Available Balance: {:?}", balance);
-                    let _ = self.v_tx_account_data_kc.iter()
+                    if last_account_balance_check.elapsed() >= Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION) {
+                        let _ = self.v_tx_account_data_kc.iter()
                         .try_for_each(|sender| {
                             let clone = balance.clone();
                             sender.send(clone)
                         });
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -143,11 +214,13 @@ impl AccountStatistics for AccountStats{
             match rx_bluefin_account_data_update.try_recv() {
                 Ok(value) => {
                     tracing::info!("Bluefin AccountData: {:?}", value);
-                    let _ = self.v_tx_account_data.iter()
+                    if last_account_balance_check.elapsed() >= Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION) {
+                        let _ = self.v_tx_account_data.iter()
                         .try_for_each(|sender| {
                             let clone = value.clone();
                             sender.send(clone)
                         });
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from bluefin yet
@@ -156,9 +229,6 @@ impl AccountStatistics for AccountStats{
                     tracing::info!("Bluefin AccountData socket has disconnected!");
                 }
             }
-
-            thread::sleep(Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION));
-
         }
     }
 

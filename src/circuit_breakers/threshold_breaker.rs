@@ -17,6 +17,8 @@ pub struct ThresholdCircuitBreaker {
     prev_poll: DateTime<Utc>,
 
     num_failures: u8,
+
+    cumulative_bluefin_commission: u128,
 }
 
 pub enum ClientType {
@@ -39,8 +41,14 @@ impl ThresholdCircuitBreaker {
             prev_poll: Utc::now(),
 
             num_failures: 0,
+
+            cumulative_bluefin_commission: 0,
     
         }
+    }
+
+    pub fn push_bluefin_commission(&mut self, commission: u128) {
+        self.cumulative_bluefin_commission += commission;
     }
 
     fn push_balance(&mut self, balance: f64, client_type: ClientType) {
@@ -67,7 +75,9 @@ impl ThresholdCircuitBreaker {
             let kc_balance = self.kucoin_balance_stack.pop().expect("Could not fetch balance from Kucoin account stats");
             let bf_balance = self.bluefin_balance_stack.pop().expect("Could not fetch balance from Bluefin account stats");
 
-            let user_balance = bf_balance + kc_balance;
+            let user_balance = bf_balance + kc_balance + 
+                (self.cumulative_bluefin_commission / 1000000000000000000) as f64 ;
+
             tracing::info!("Bluefin Balance: {}, Kucoin Balance: {}", bf_balance, kc_balance);
             let critical_balance = self.daily_base_balance - (self.daily_base_balance * ({self.config.loss_threshold_bps as f64} /10_000.0));
             let is_critical = !(user_balance >= critical_balance);   

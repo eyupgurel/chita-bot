@@ -12,6 +12,7 @@ use crate::models::common::{
     abs, add, divide, round_to_precision, subtract, BookOperations, CircuitBreakerConfig, Market,
     OrderBook,
 };
+use crate::TradeOrderUpdate;
 use crate::models::kucoin_models::Level2Depth;
 use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
 use crate::sockets::bluefin_ob_socket::BluefinOrderBookStream;
@@ -43,6 +44,7 @@ pub struct MM {
     rx_account_data_kc: Receiver<AvailableBalance>,
     rx_hedger_stats: Receiver<f64>,
     tx_bluefin_hedger_ob: Sender<OrderBook>,
+    rx_bluefin_trade_order_update: Receiver<TradeOrderUpdate>
 }
 
 impl MM {
@@ -56,6 +58,7 @@ impl MM {
         Sender<AvailableBalance>,
         Sender<f64>,
         Receiver<OrderBook>,
+        Sender<TradeOrderUpdate>
     ) {
         let vars: EnvVars = env::env_variables();
 
@@ -92,6 +95,7 @@ impl MM {
         let (tx_hedger_stats, rx_hedger_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
         let (tx_bluefin_hedger_ob, rx_bluefin_hedger_ob): (Sender<OrderBook>, Receiver<OrderBook>) =
             mpsc::channel();
+        let(tx_bluefin_trade_order_update, rx_bluefin_trade_order_update): (Sender<TradeOrderUpdate>, Receiver<TradeOrderUpdate>) = mpsc::channel();
 
         (
             MM {
@@ -113,12 +117,14 @@ impl MM {
                 rx_account_data_kc,
                 rx_hedger_stats,
                 tx_bluefin_hedger_ob,
+                rx_bluefin_trade_order_update
             },
             tx_stats,
             tx_account_data,
             tx_account_data_kc,
             tx_hedger_stats,
             rx_bluefin_hedger_ob,
+            tx_bluefin_trade_order_update
         )
     }
 
@@ -411,6 +417,19 @@ impl MarketMaker for MM {
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     tracing::info!("statistic worker has disconnected!");
+                }
+            }
+
+            match self.rx_bluefin_trade_order_update.try_recv() {
+                Ok(value) => {
+                    tracing::info!("Bluefin Trade Order Update {:?}", value);
+                    account_balance_threshold_breaker.push_bluefin_commission(value.commission);
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No message from kucoin yet
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::info!("Kucoin account data worker has disconnected!");
                 }
             }
 
