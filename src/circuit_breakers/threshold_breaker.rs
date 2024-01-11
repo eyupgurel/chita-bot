@@ -71,28 +71,28 @@ impl ThresholdCircuitBreaker {
     }
 
     fn is_balance_critical(&mut self) -> bool {
-        if !self.kucoin_balance_stack.is_empty() && !self.bluefin_balance_stack.is_empty() {
-            let kc_balance = self.kucoin_balance_stack.pop().expect("Could not fetch balance from Kucoin account stats");
-            let bf_balance = self.bluefin_balance_stack.pop().expect("Could not fetch balance from Bluefin account stats");
+        // if !self.kucoin_balance_stack.is_empty() && !self.bluefin_balance_stack.is_empty() {
+        //     let kc_balance = self.kucoin_balance_stack.pop().expect("Could not fetch balance from Kucoin account stats");
+        //     let bf_balance = self.bluefin_balance_stack.pop().expect("Could not fetch balance from Bluefin account stats");
 
-            let user_balance = bf_balance + kc_balance + 
-                (self.cumulative_bluefin_commission / 1000000000000000000) as f64 ;
+        //     let user_balance = bf_balance + kc_balance + 
+        //         (self.cumulative_bluefin_commission / 1000000000000000000) as f64 ;
 
-            tracing::info!("Bluefin Balance: {}, Kucoin Balance: {}", bf_balance, kc_balance);
-            let critical_balance = self.daily_base_balance - (self.daily_base_balance * ({self.config.loss_threshold_bps as f64} /10_000.0));
-            let is_critical = !(user_balance >= critical_balance);   
-            if is_critical {
-                self.num_failures += 1;
-                tracing::info!("User balance is critically low {} compared to critical balance {}. Comparing with base balance {}. Cancelling all orders and shutting the bot down...", user_balance, critical_balance, self.daily_base_balance);
-            } else {
-                self.num_failures = 0;
-                tracing::debug!("User balance of {} is bigger than critically low balance {}. Continuing operations...", user_balance, critical_balance);
-            }
+        //     tracing::info!("Bluefin Balance: {}, Kucoin Balance: {}", bf_balance, kc_balance);
+        //     let critical_balance = self.daily_base_balance - (self.daily_base_balance * ({self.config.loss_threshold_bps as f64} /10_000.0));
+        //     let is_critical = !(user_balance >= critical_balance);   
+        //     if is_critical {
+        //         self.num_failures += 1;
+        //         tracing::info!("User balance is critically low {} compared to critical balance {}. Comparing with base balance {}. Cancelling all orders and shutting the bot down...", user_balance, critical_balance, self.daily_base_balance);
+        //     } else {
+        //         self.num_failures = 0;
+        //         tracing::debug!("User balance of {} is bigger than critically low balance {}. Continuing operations...", user_balance, critical_balance);
+        //     }
 
-            let is_num_failures_reached = self.num_failures > self.config.failure_threshold;
+        //     let is_num_failures_reached = self.num_failures > self.config.failure_threshold;
 
-            return is_critical && is_num_failures_reached;
-        }
+        //     return is_critical && is_num_failures_reached;
+        // }
         
         return false;
     }
