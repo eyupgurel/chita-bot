@@ -565,9 +565,10 @@ impl Hedger for HGR {
 
     fn hedge(&mut self, dry_run: bool, ob: Option<&OrderBook>, is_periodic: bool) {
         
-        // let bluefin_market = self.market.symbols.bluefin.to_owned();
-        // self.bluefin_position = self.bluefin_client.get_user_position(&bluefin_market);
-
+        if is_periodic {
+            let bluefin_market = self.market.symbols.bluefin.to_owned();
+            self.bluefin_position = self.bluefin_client.get_user_position(&bluefin_market);
+        }
 
         let (bluefin_market, order_quantity, is_buy) = self.calc_net_pos_qty();
 
