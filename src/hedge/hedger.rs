@@ -595,9 +595,16 @@ impl Hedger for HGR {
                 
                 tracing::debug!("Hedge Order Quantity {:?}", &order_quantity_f64);
 
-                let price = f64::trunc(
-                    HGR::calc_limit_order_price(order_quantity, is_buy, ob.unwrap()) 
-                    * 100.0) / 100.0;
+                let mut price = HGR::calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
+
+                let scale_factor = if self.market.name.eq("btc") {
+                    10.0
+                } else {
+                    //eth
+                    100.0
+                };
+
+                price = f64::trunc(price * scale_factor) / scale_factor;
 
                 tracing::info!(
                     hedger_order_price = price,
