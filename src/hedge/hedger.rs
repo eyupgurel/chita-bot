@@ -83,13 +83,13 @@ impl HGR {
             .expect("Could not fetch Kucoin Position on Hedger startup");
 
         tracing::info!(
-            bluefin_position_qty = bluefin_position.quantity / BIGNUMBER_BASE,
+            bluefin_position_qty = bluefin_position.quantity as f64 / BIGNUMBER_BASE as f64,
             bluefin_position_symbol = bluefin_position.symbol,
             "Bluefin Initial Hedger Position"
         );
 
         tracing::info!(
-            kucoin_position_qty = kucoin_position.current_qty / 100,
+            kucoin_position_qty = kucoin_position.current_qty as f64/ 100.0,
             kucoin_position_symbol = kucoin_position.symbol,
             "Kucoin Initial Hedger Position"
         );
