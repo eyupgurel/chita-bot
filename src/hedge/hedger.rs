@@ -16,6 +16,7 @@ use crate::models::common::{CircuitBreakerConfig, Market, OrderBook};
 use crate::models::kucoin_models::KucoinUserPosition;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
+use bigdecimal::Signed;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -204,7 +205,7 @@ impl Hedger for HGR {
                         let open_qty = Decimal::from_u128(order_update.open_qty).unwrap()
                             / Decimal::from(BIGNUMBER_BASE);
 
-                        if open_qty.is_zero() && order_update.symbol == bluefin_market {
+                        if order_update.symbol == bluefin_market {
                             let quantity = Decimal::from_u128(order_update.quantity).unwrap()
                                 / Decimal::from(BIGNUMBER_BASE);
                             let avg_fill_price = Decimal::from_u128(order_update.avg_fill_price)
@@ -503,7 +504,8 @@ impl Hedger for HGR {
         let bluefin_market = self.market.symbols.bluefin.to_owned();
 
         // unwrap kucoin position and get quantity
-        let kucoin_quantity = Decimal::from(self.kucoin_position.current_qty);
+        let kucoin_quantity = Decimal::from(self.kucoin_position.current_qty);  
+        //-0.003
 
         let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
 
@@ -514,7 +516,14 @@ impl Hedger for HGR {
             bluefin_quantity = bluefin_quantity * Decimal::from(-1);
         }
 
-        let target_quantity = current_kucoin_qty * Decimal::from(-1);
+
+        let target_quantity = 
+        if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_negative()) || 
+            (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_positive()) {
+                current_kucoin_qty * Decimal::from(-1)
+            } else {
+                current_kucoin_qty
+            };
 
         let diff = target_quantity - bluefin_quantity;
 
