@@ -1,4 +1,5 @@
 use std::ops::Div;
+use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -18,7 +19,7 @@ use rust_decimal::Decimal;
 use std::time::Duration;
 use std::time::Instant;
 
-static ACCOUNT_STATS_PERIOD_DURATION: u64 = 3;
+static ACCOUNT_STATS_PERIOD_DURATION: u64 = 0;
 
 pub trait AccountStatistics {
     fn log(&mut self);
@@ -33,6 +34,7 @@ pub struct AccountStats {
     v_tx_account_data: Vec<Sender<AccountData>>,
     v_tx_account_data_kc: Vec<Sender<AvailableBalance>>,
     v_tx_account_data_bluefin_user_trade: Vec<Sender<TradeOrderUpdate>>,
+    starting_account_balance: f64,
 }
 
 impl AccountStats {
@@ -64,13 +66,16 @@ impl AccountStats {
             vars.kucoin_leverage,
         );
 
+        let starting_account_balance: f64 = -1.0;
+
         AccountStats {
             bluefin_client,
             kucoin_client,
             config,
             v_tx_account_data,
             v_tx_account_data_kc,
-            v_tx_account_data_bluefin_user_trade
+            v_tx_account_data_bluefin_user_trade,
+            starting_account_balance,
         }
     }
 }
@@ -160,6 +165,7 @@ impl AccountStatistics for AccountStats{
                 |msg: &str| -> AvailableBalance {
                     let available_balance: AvailableBalance =
                         serde_json::from_str(&msg).expect("Can't parse");
+
                     tracing::info!(available_balance=available_balance.data.available_balance,
                                    hold_balance=available_balance.data.hold_balance,
                                    "Kucoin Account Balance");
@@ -196,6 +202,19 @@ impl AccountStatistics for AccountStats{
                     let balance = value.1;
                     tracing::info!("Kucoin Available Balance: {:?}", balance);
                     if last_account_balance_check.elapsed() >= Duration::from_secs(ACCOUNT_STATS_PERIOD_DURATION) {
+                        let curr_balance = balance.data.available_balance.parse::<f64>().unwrap() 
+                            + balance.data.hold_balance.parse::<f64>().unwrap();
+                        if self.starting_account_balance == -1.0 {
+                            self.starting_account_balance = curr_balance;
+                            tracing::info!("Caching starting Kucoin Account Balance {}", self.starting_account_balance);
+                            
+                        }
+
+                        tracing::info!(
+                            kucoin_balance_diff = curr_balance - self.starting_account_balance,
+                            "Kucoin Account Balance diff"
+                        );
+
                         let _ = self.v_tx_account_data_kc.iter()
                         .try_for_each(|sender| {
                             let clone = balance.clone();

@@ -438,12 +438,12 @@ impl MarketMaker for MM {
                     let balance = value.data.available_balance.parse::<f64>().unwrap()
                         + value.data.hold_balance.parse::<f64>().unwrap();
                     tracing::debug!("Kucoin available balance: {:?}", &balance);
-                    account_balance_threshold_breaker.check_user_balance(
-                        balance,
-                        ClientType::KUCOIN,
-                        &bluefin_market,
-                        vars.dry_run,
-                    );
+                    // account_balance_threshold_breaker.check_user_balance(
+                    //     balance,
+                    //     ClientType::KUCOIN,
+                    //     &bluefin_market,
+                    //     vars.dry_run,
+                    // );
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
