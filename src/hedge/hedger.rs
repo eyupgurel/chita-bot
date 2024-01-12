@@ -626,12 +626,6 @@ impl Hedger for HGR {
                     );
                 } else {
                     tracing::info!("Placed Hedge limit order on Bluefin");
-                    let bluefin_market = self.market.symbols.bluefin.to_owned();
-                    let bluefin_pos_after_hedging = self.bluefin_client.get_user_position(&bluefin_market);
-                    tracing::info!(
-                        bluefin_position_after_hedging = bluefin_pos_after_hedging.quantity as f64 / BIGNUMBER_BASE as f64,
-                        "Bluefin Position After Hedging"
-                    );
                 }
 
                 // //Optimistic approach to prevent oscillations. For now update local position as if the position if filled immediately.
