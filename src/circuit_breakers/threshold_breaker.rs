@@ -107,8 +107,8 @@ impl ThresholdCircuitBreaker {
         self.push_balance(balance, client_type);
         self.cache_base_account_balance();
         if self.is_balance_critical() {
-            self.open_breaker(market, dry_run);
-            panic!("User balance critically low. Cancelling all orders and shutting the bot down to prevent further loss...");
+            // self.open_breaker(market, dry_run);
+            // panic!("User balance critically low. Cancelling all orders and shutting the bot down to prevent further loss...");
         }
     }
 }
