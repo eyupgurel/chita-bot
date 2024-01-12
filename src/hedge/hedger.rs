@@ -292,10 +292,12 @@ impl Hedger for HGR {
                     tracing::info!(
                         market = kucoin_user_pos.data.symbol,
                         kucoin_real_quantity = quantity.to_f64().unwrap(),
+                        kucoin_avg_entry_price = avg_entry_price.to_f64().unwrap(),
                         kucoin_volume = volume,
                         kucoin_unrealized_pnl = kucoin_user_pos.data.unrealised_pnl,
                         kucoin_realized_pnl = kucoin_user_pos.data.realised_pnl,
                         kucoin_gross_realized_pnl = kucoin_user_pos.data.realised_gross_pnl,
+                        kucoin_position_update_curr_timestamp = kucoin_user_pos.data.current_timestamp,
                         "Kucoin Position Update"
                     );
 
