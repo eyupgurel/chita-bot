@@ -499,7 +499,7 @@ impl MarketMaker for MM {
     ) {
         let vars: EnvVars = env::env_variables();
 
-        tracing::debug!("Calculating best taker prices...");
+        tracing::info!("Calculating best taker prices...");
 
         let mm = self.create_mm_pair(ref_book, mm_book, tkr_book, shift, net_quantity);
 
@@ -569,12 +569,12 @@ impl MarketMaker for MM {
         let (ask_prices, ask_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_asks.into_iter().unzip();
         let (bid_prices, bid_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_bids.into_iter().unzip();
 
-        tracing::debug!(
+        tracing::info!(
             mm_ask_prices_empty = ask_prices.is_empty(),
             mm_bid_prices_empty = bid_prices.is_empty(),
             "Empty Ask and Bid Price Check"
         );
-        tracing::debug!("Got best prices for market orders. Placing Limit Order...");
+        tracing::info!("Got best prices for market orders. Placing Limit Order...");
 
         if self.last_mm_instant.elapsed()
             >= Duration::from_millis(vars.market_making_time_throttle_period)

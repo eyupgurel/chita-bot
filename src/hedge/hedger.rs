@@ -479,7 +479,7 @@ impl Hedger for HGR {
                 && (last_hedge_time.elapsed() >= Duration::from_secs_f64(periodic_hedging_period)
                     && ob_map.contains_key(&bluefin))
             {
-                tracing::info!(periodic_hedge = true, "Periodic Hedger");
+                tracing::debug!(periodic_hedge = true, "Periodic Hedger");
                 self.hedge(dry_run, ob_map.get(&bluefin), true);
                 last_hedge_time = Instant::now();
             }
@@ -575,12 +575,12 @@ impl Hedger for HGR {
 
     fn hedge(&mut self, dry_run: bool, ob: Option<&OrderBook>, is_periodic: bool) {
 
-        let bluefin_market = self.market.symbols.bluefin.to_owned();
-        let bluefin_pos_before_hedging = self.bluefin_client.get_user_position(&bluefin_market);
-        tracing::info!(
-            bluefin_position_before_hedging = bluefin_pos_before_hedging.quantity as f64 / BIGNUMBER_BASE as f64,
-            "Bluefin Position Before Hedging"
-        );
+        // let bluefin_market = self.market.symbols.bluefin.to_owned();
+        // let bluefin_pos_before_hedging = self.bluefin_client.get_user_position(&bluefin_market);
+        // tracing::info!(
+        //     bluefin_position_before_hedging = bluefin_pos_before_hedging.quantity as f64 / BIGNUMBER_BASE as f64,
+        //     "Bluefin Position Before Hedging"
+        // );
 
 
         let (bluefin_market, order_quantity, is_buy) = self.calc_net_pos_qty();
@@ -594,7 +594,7 @@ impl Hedger for HGR {
                 let order_quantity_f64 = order_quantity.to_f64().unwrap();
                 tracing::debug!("order quantity as f64: {}", order_quantity_f64);
 
-                tracing::info!("Hedge Order Quantity {:?}", &order_quantity_f64);
+                tracing::debug!("Hedge Order Quantity {:?}", &order_quantity_f64);
 
                 let price = HGR::calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
                 tracing::info!(
