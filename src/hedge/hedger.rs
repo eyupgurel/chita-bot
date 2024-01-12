@@ -275,7 +275,6 @@ impl Hedger for HGR {
                     let quantity = Decimal::from_i128(kucoin_user_pos.data.current_qty).unwrap()
                         / Decimal::from(kucoin_lot_size);
 
-
                     let avg_entry_price = Decimal::from_f64(kucoin_user_pos.data.avg_entry_price).unwrap();
 
                     let volume = quantity.mul(avg_entry_price).abs().to_f64().unwrap();
@@ -572,17 +571,17 @@ impl Hedger for HGR {
 
         let (bluefin_market, order_quantity, is_buy) = self.calc_net_pos_qty();
 
-        tracing::info!("Hedge Order Quantity {:?}", order_quantity);
-
-
         if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap()
             && !dry_run
             && ob.is_some()
         {
             {
+
                 tracing::debug!("order quantity as decimal: {}", order_quantity);
                 let order_quantity_f64 = order_quantity.to_f64().unwrap();
                 tracing::debug!("order quantity as f64: {}", order_quantity_f64);
+
+                tracing::info!("Hedge Order Quantity {:?}", &order_quantity_f64);
 
                 let price = HGR::calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
                 tracing::info!(
