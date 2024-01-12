@@ -1,6 +1,14 @@
-use crate::bluefin::models::{OrderSettlementCancellation, parse_order_settlement_cancellation};
-use crate::bluefin::{
-    parse_order_update, parse_user_position, parse_order_settlement_update, AccountData, BluefinClient, OrderUpdate, UserPosition, OrderSettlementUpdate
+use crate::bluefin::models::OrderSettlementCancellation;
+use crate::bluefin::models::OrderUpdateMessage;
+use crate::bluefin::{ 
+    parse_user_position, 
+    AccountData, 
+    BluefinClient, 
+    OrderUpdate, 
+    UserPosition, 
+    OrderSettlementUpdate, 
+    OrderSettlementUpdateMessage,
+    OrderSettlementCancellationMessage,
 };
 use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
 use crate::circuit_breakers::circuit_breaker::CircuitBreaker;
@@ -15,6 +23,7 @@ use crate::models::common::{CircuitBreakerConfig, Market, OrderBook};
 use crate::models::kucoin_models::KucoinUserPosition;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
+use bigdecimal::Zero;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -136,18 +145,25 @@ impl Hedger for HGR {
                 &bluefin_auth_token,
                 "OrderSettlementUpdate",
                 tx_bluefin_order_settlement_update, // Sender channel of the appropriate type
-                |msg: &str| -> OrderSettlementUpdate {
+                |msg: &str| -> Option<OrderSettlementUpdate> {
                     tracing::info!("Bluefin Order Settlement Update {}", msg);
-                    let v: Value = serde_json::from_str(msg).unwrap();
-                    let order_settlement: OrderSettlementUpdate = parse_order_settlement_update(v["data"].clone());
+                    // let v: Value = serde_json::from_str(msg).unwrap();
+                    // let order_settlement: OrderSettlementUpdate = parse_order_settlement_update(v["data"].clone());
 
-                    tracing::info!(
-                        quantity_sent_for_settlement = order_settlement.quantity_sent_for_settlement,
-                        is_buy = order_settlement.is_buy,   
-                        "Bluefin Order Settlement Update"
-                    );
-
-                    order_settlement
+                    let order_settlement: OrderSettlementUpdateMessage = serde_json::from_str(msg).unwrap();
+                    if order_settlement.error.is_some() {
+                        tracing::error!("Error getting Bluefin Order Settlement Update message: {:?}", order_settlement.error.unwrap());
+                        return None;   
+                    } else {
+                        let data = order_settlement.data.unwrap();
+                        tracing::info!(
+                            quantity_sent_for_settlement = data.quantity_sent_for_settlement,
+                            is_buy = data.is_buy,   
+                            "Bluefin Order Settlement Update"
+                        );
+    
+                        Some(data)
+                    }
                 },
             );
         });
@@ -162,18 +178,26 @@ impl Hedger for HGR {
                 &bluefin_auth_token,
                 "OrderCancelledOnReversionUpdate",
                 tx_bluefin_order_settlement_cancellation, // Sender channel of the appropriate type
-                |msg: &str| -> OrderSettlementCancellation {
+                |msg: &str| -> Option<OrderSettlementCancellation> {
                     tracing::info!("Bluefin Order Settlement Cancellation {}", msg);
-                    let v: Value = serde_json::from_str(msg).unwrap();
-                    let order_settlement_cancellation: OrderSettlementCancellation = parse_order_settlement_cancellation(v["data"].clone());
+                    // let v: Value = serde_json::from_str(msg).unwrap();
+                    // let order_settlement_cancellation: OrderSettlementCancellation = parse_order_settlement_cancellation(v["data"].clone());
 
-                    tracing::info!(
-                        quantity_sent_for_cancellation = order_settlement_cancellation.quantity_sent_for_cancellation,
-                        is_buy = order_settlement_cancellation.is_buy,   
-                        "Bluefin Order Settlement Cancellation"
-                    );
+                    let order_settlement_cancellation: OrderSettlementCancellationMessage = serde_json::from_str(msg).unwrap();
 
-                    order_settlement_cancellation
+                    if order_settlement_cancellation.error.is_some() {
+                        tracing::error!("Error getting Bluefin Order Settlement Cancellation message: {:?}", order_settlement_cancellation.error.unwrap());
+                        return None;   
+                    } else {
+                        let data = order_settlement_cancellation.data.unwrap();
+                        tracing::info!(
+                            quantity_sent_for_cancellation = data.quantity_sent_for_cancellation,
+                            is_buy = data.is_buy,   
+                            "Bluefin Order Settlement Cancellation"
+                        );
+
+                        Some(data)
+                    }
                 },
             );
         });
@@ -189,30 +213,32 @@ impl Hedger for HGR {
                 &bluefin_auth_token,
                 "OrderUpdate",
                 tx_bluefin_order_update, // Sender channel of the appropriate type
-                |msg: &str| -> OrderUpdate {
+                |msg: &str| -> Option<OrderUpdate> {
                     tracing::info!("Bluefin Order Update {}", &msg);
 
-                    let v: Value = serde_json::from_str(&msg).unwrap();
-                    let order_update: OrderUpdate = parse_order_update(v["data"]["order"].clone());
+                    let order_update: OrderUpdateMessage = serde_json::from_str(&msg).unwrap();
 
-                    let open_qty = Decimal::from_u128(order_update.open_qty).unwrap()
-                        / Decimal::from(BIGNUMBER_BASE);
+                    if order_update.error.is_some() {
+                        tracing::error!("Error getting Bluefin Order Update message: {:?}", order_update.error.unwrap());
+                        return None;  
+                    } else {
+                        let data = order_update.data.unwrap().order;
+                        let open_qty = data.open_qty;
 
-                    if open_qty.is_zero() && order_update.symbol == bluefin_market {
-                        let quantity = Decimal::from_u128(order_update.quantity).unwrap()
-                            / Decimal::from(BIGNUMBER_BASE);
-                        let avg_fill_price = Decimal::from_u128(order_update.avg_fill_price)
-                            .unwrap()
-                            / Decimal::from(BIGNUMBER_BASE);
-                        let volume = (quantity * avg_fill_price).to_f64().unwrap();
-                        tracing::info!(
-                            market = order_update.symbol,
-                            bluefin_volume = volume,
-                            bluefin_order_status = order_update.order_status,
-                            "Bluefin Volume"
-                        );
+                        if open_qty.is_zero() && data.symbol.eq(&bluefin_market) {
+                            let quantity = data.quantity;
+                            let avg_fill_price = data.avg_fill_price;
+                            let volume = quantity * avg_fill_price;
+
+                            tracing::info!(
+                                market = data.symbol,
+                                bluefin_volume = volume,
+                                bluefin_order_status = data.order_status,
+                                "Bluefin Volume"
+                            );
+                        }
+                        Some(data)
                     }
-                    order_update
                 },
             );
         });
@@ -352,62 +378,72 @@ impl Hedger for HGR {
         loop {
             match rx_bluefin_order_settlement_update.try_recv() {
                 Ok(value) => {
-                    tracing::info!("Bluefin Order Settlement update: {:?}", value);
-                    let curr_side: i128 = if self.bluefin_position.side { 1 } else { -1 };
-                    let new_qty = (self.bluefin_position.quantity as i128 * curr_side) +
-                        ((value.quantity_sent_for_settlement as i128) * (if value.is_buy { 1 } else { -1 }));
+                    if value.is_none() {
+                        tracing::warn!("Bluefin Order Settlement Update message dropped");
+                    } else {
+                        let some_value = value.unwrap();
+                        tracing::info!("Bluefin Order Settlement update: {:?}", some_value);
+                        let curr_side: i128 = if self.bluefin_position.side { 1 } else { -1 };
+                        let new_qty = (self.bluefin_position.quantity as i128 * curr_side) +
+                            ((some_value.quantity_sent_for_settlement as i128) * (if some_value.is_buy { 1 } else { -1 }));
 
-                    tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
+                        tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
 
-                    self.bluefin_position.quantity = new_qty.abs() as u128;
-                    self.bluefin_position.side = if new_qty > 0 { true } else { false };
+                        self.bluefin_position.quantity = new_qty.abs() as u128;
+                        self.bluefin_position.side = if new_qty > 0 { true } else { false };
 
-                    tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
+                        tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
 
-                    let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
-                    let diff = if is_buy {
-                            order_quantity.to_f64().unwrap()
-                        } else {
-                            order_quantity.set_sign_negative(true);
-                            order_quantity.to_f64().unwrap()
-                        };
+                        let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
+                        let diff = if is_buy {
+                                order_quantity.to_f64().unwrap()
+                            } else {
+                                order_quantity.set_sign_negative(true);
+                                order_quantity.to_f64().unwrap()
+                            };
 
-                    self.tx_hedger
-                        .send(diff.to_f64().unwrap())
-                        .expect("Could not send current net position from hedger to mm!");
-                }
-                Err(mpsc::TryRecvError::Empty) => {}
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::info!("Bluefin Order Settlement update worker has disconnected!");
-                    
-                }
+                        self.tx_hedger
+                            .send(diff.to_f64().unwrap())
+                            .expect("Could not send current net position from hedger to mm!");
+                        }
+                    }
+                    Err(mpsc::TryRecvError::Empty) => {}
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        tracing::info!("Bluefin Order Settlement update worker has disconnected!");
+                        
+                    }
             }
 
             match rx_bluefin_order_settlement_cancellation.try_recv() {
                 Ok(value) => {
-                    tracing::info!("Bluefin Order Settlement Cancellation: {:?}", value);
-                    let curr_side: i128 = if self.bluefin_position.side { 1 } else { -1 };
-                    let new_qty = (self.bluefin_position.quantity as i128 * curr_side) -
-                        ((value.quantity_sent_for_cancellation as i128) * (if value.is_buy { 1 } else { -1 }));
+                    if value.is_none() {
+                        tracing::warn!("Bluefin Order Settlement Cancellation message dropped");
+                    } else {
+                        let some_value = value.unwrap();
+                        tracing::info!("Bluefin Order Settlement Cancellation: {:?}", some_value);
+                        let curr_side: i128 = if self.bluefin_position.side { 1 } else { -1 };
+                        let new_qty = (self.bluefin_position.quantity as i128 * curr_side) -
+                            ((some_value.quantity_sent_for_cancellation as i128) * (if some_value.is_buy { 1 } else { -1 }));
 
-                    tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
+                        tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
 
-                    self.bluefin_position.quantity = new_qty.abs() as u128;
-                    self.bluefin_position.side = if new_qty > 0 { true } else { false };
+                        self.bluefin_position.quantity = new_qty.abs() as u128;
+                        self.bluefin_position.side = if new_qty > 0 { true } else { false };
 
-                    tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
+                        tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
 
-                    let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
-                    let diff = if is_buy {
-                            order_quantity.to_f64().unwrap()
-                        } else {
-                            order_quantity.set_sign_negative(true);
-                            order_quantity.to_f64().unwrap()
-                        };
+                        let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
+                        let diff = if is_buy {
+                                order_quantity.to_f64().unwrap()
+                            } else {
+                                order_quantity.set_sign_negative(true);
+                                order_quantity.to_f64().unwrap()
+                            };
 
-                    self.tx_hedger
-                        .send(diff.to_f64().unwrap())
-                        .expect("Could not send current net position from hedger to mm!");
+                        self.tx_hedger
+                            .send(diff.to_f64().unwrap())
+                            .expect("Could not send current net position from hedger to mm!");   
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {

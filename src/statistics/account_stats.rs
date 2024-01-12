@@ -3,17 +3,16 @@ use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
 use crate::bluefin::models::TradeOrderUpdate;
+use crate::bluefin::models::TradeOrderMessage;
 use crate::bluefin::{AccountData, AccountUpdateEventData, BluefinClient};
 use crate::env;
 use crate::env::EnvVars;
-use crate::kucoin::{AvailableBalance, Credentials, KuCoinClient, TransactionHistory};
+use crate::kucoin::{AvailableBalance, Credentials, KuCoinClient};
 use crate::models::common::Config;
-use crate::models::kucoin_models::PositionList;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
 use bigdecimal::{FromPrimitive, ToPrimitive};
 use serde_json::Value;
-use crate::bluefin::models::parse_user_trade_order_update;
 use rust_decimal::Decimal;
 use std::time::Duration;
 use std::time::Instant;
@@ -121,27 +120,29 @@ impl AccountStatistics for AccountStats{
                 &bluefin_auth_token,
                 "UserTrade",
                 tx_bluefin_trade_order_update, // Sender channel of the appropriate type
-                |msg: &str| -> TradeOrderUpdate {
+                |msg: &str| -> Option<TradeOrderUpdate> {
                     tracing::info!("User Trade: {}", msg);
 
-                    let v: Value = serde_json::from_str(&msg).unwrap();
-                    let user_trade: TradeOrderUpdate = parse_user_trade_order_update(serde_json::from_value(v["data"]["trade"].clone()).unwrap());
+                    let user_trade: TradeOrderMessage = serde_json::from_str(&msg).unwrap();
 
-                    let user_trade_commission_dec = Decimal::from_u128(user_trade.commission).unwrap()
-                        .div(Decimal::from_u128(1000000000000000000).unwrap());
-                    let user_trade_display = user_trade_commission_dec.to_f64().unwrap();
+                    if user_trade.error.is_some() {
+                        tracing::error!("Error getting User Trade message: {:?}", user_trade.error.unwrap());
+                        return None;  
+                    } else {
+                        let data = user_trade.data.unwrap().trade;
 
-                    let realized_pnl_dec = Decimal::from_i128(user_trade.realized_pnl).unwrap()
-                    .div(Decimal::from_u128(1000000000000000000).unwrap());
+                        let commission = data.commission;
+                        let realized_pnl = data.realized_pnl;
 
-                    tracing::info!(
-                        bluefin_market=user_trade.symbol,
-                        bluefin_commission_fee=user_trade_display,
-                        bluefin_realized_pnl = realized_pnl_dec.to_f64().unwrap(),
-                        "Bluefin User Trade"
-                    );
+                        tracing::info!(
+                            bluefin_market = data.symbol,
+                            bluefin_commission_fee = commission,
+                            bluefin_realized_pnl = realized_pnl,
+                            "Bluefin User Trade"
+                        );
 
-                    user_trade
+                        Some(data)
+                    }
                 },
             );
         });
@@ -177,11 +178,16 @@ impl AccountStatistics for AccountStats{
 
             match rx_bluefin_trade_order_update.try_recv() {
                 Ok(value) => {
-                    let _ = self.v_tx_account_data_bluefin_user_trade.iter()
-                        .try_for_each(|sender| {
-                            let clone = value.clone();
-                            sender.send(clone)
-                        });
+                    if value.is_none() {
+                        tracing::warn!("Bluefin Trade Order message dropped");
+                    } else {
+                        let some_value = value.unwrap();
+                        let _ = self.v_tx_account_data_bluefin_user_trade.iter()
+                                    .try_for_each(|sender| {
+                                        let clone = some_value.clone();
+                                        sender.send(clone)
+                                    });
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
