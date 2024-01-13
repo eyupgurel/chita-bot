@@ -524,7 +524,8 @@ impl Hedger for HGR {
 
         let target_quantity = 
         if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_negative()) || 
-            (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_positive()) {
+            (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_positive()) || 
+            (bluefin_quantity.is_zero()) {
                 current_kucoin_qty * Decimal::from(-1)
             } else {
                 current_kucoin_qty
