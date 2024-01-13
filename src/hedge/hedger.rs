@@ -600,7 +600,7 @@ impl Hedger for HGR {
         // );
 
 
-        let (bluefin_market, order_quantity, is_buy) = self.calc_net_pos_qty();
+        let (bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
 
         if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap()
             && !dry_run
@@ -652,6 +652,17 @@ impl Hedger for HGR {
                     );
                 } else {
                     tracing::info!("Placed Hedge limit order on Bluefin");
+
+                    let diff = if is_buy {
+                        order_quantity.to_f64().unwrap()
+                    } else {
+                        order_quantity.set_sign_negative(true);
+                        order_quantity.to_f64().unwrap()
+                    };
+
+                    self.tx_hedger
+                        .send(diff.to_f64().unwrap())
+                        .expect("Could not send current net position from hedger to mm!");
                 }
 
                 // //Optimistic approach to prevent oscillations. For now update local position as if the position if filled immediately.
