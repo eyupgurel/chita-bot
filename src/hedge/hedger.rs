@@ -622,9 +622,7 @@ impl Hedger for HGR {
                     100.0
                 };
 
-                let mut order_quantity_f64 = order_quantity.to_f64().unwrap();
-
-                order_quantity_f64 = f64::trunc(order_quantity_f64 * scale_factor) / scale_factor;
+                let order_quantity_f64 = order_quantity.to_f64().unwrap();
 
                 tracing::debug!("Hedge Order Quantity {:?}", &order_quantity_f64);
 
