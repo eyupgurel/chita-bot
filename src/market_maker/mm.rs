@@ -531,7 +531,8 @@ impl MarketMaker for MM {
             .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
             .filter(|&(ask_price, ask_size, tkr_bid_price, tkr_bid_size)| {
                 let mut ask_price_check: bool = ask_price > tkr_bid_price
-                    && ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price;
+                    && ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price
+                    && ask_size <= tkr_bid_size;
 
                 if net_quantity > 0.0 {
                     ask_price_check = true;
@@ -539,7 +540,7 @@ impl MarketMaker for MM {
                     //ignore
                 }
 
-                ask_price_check && ask_size <= tkr_bid_size
+                ask_price_check
             })
             .collect::<Vec<_>>()
             .iter()
