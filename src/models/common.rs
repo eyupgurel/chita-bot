@@ -67,8 +67,8 @@ impl BookOperations for OrderBook {
             .collect()
     }
     fn ask_shift(&self, shift:f64) -> Vec<f64> {
-        self.bids.iter()
-            .map(|(_, bid_size)| (bid_size + shift))
+        self.asks.iter()
+            .map(|(_, ask_size)| (ask_size + shift))
             .collect()
     }
 

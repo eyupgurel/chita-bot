@@ -127,6 +127,9 @@ impl Hedger for HGR {
         let (tx_bluefin_order_settlement_cancellation, rx_bluefin_order_settlement_cancellation) =
             mpsc::channel();
 
+
+        let market = self.market.clone();
+        
         let bluefin_market = self.market.symbols.bluefin.to_owned();
 
         let bluefin_market_for_settlement_update = bluefin_market.clone();
@@ -146,6 +149,7 @@ impl Hedger for HGR {
                         parse_order_settlement_update(v["data"].clone());
 
                     tracing::info!(
+                        market = market.name,
                         quantity_sent_for_settlement =
                             order_settlement.quantity_sent_for_settlement,
                         is_buy = order_settlement.is_buy,
@@ -174,6 +178,7 @@ impl Hedger for HGR {
                         parse_order_settlement_cancellation(v["data"].clone());
 
                     tracing::info!(
+                        market = market.symbols.bluefin,
                         quantity_sent_for_cancellation =
                             order_settlement_cancellation.quantity_sent_for_cancellation,
                         is_buy = order_settlement_cancellation.is_buy,

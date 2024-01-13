@@ -423,7 +423,7 @@ impl MarketMaker for MM {
             match self.rx_bluefin_trade_order_update.try_recv() {
                 Ok(value) => {
                     tracing::info!("Bluefin Trade Order Update {:?}", value);
-                    account_balance_threshold_breaker.push_bluefin_commission(value.commission);
+                    // account_balance_threshold_breaker.push_bluefin_commission(value.commission);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -456,12 +456,12 @@ impl MarketMaker for MM {
             match self.rx_account_data.try_recv() {
                 Ok(value) => {
                     tracing::debug!("Bluefin available balance: {:?}", value.account_value);
-                    account_balance_threshold_breaker.check_user_balance(
-                        value.account_value,
-                        ClientType::BLUEFIN,
-                        &bluefin_market,
-                        vars.dry_run,
-                    );
+                    // account_balance_threshold_breaker.check_user_balance(
+                    //     value.account_value,
+                    //     ClientType::BLUEFIN,
+                    //     &bluefin_market,
+                    //     vars.dry_run,
+                    // );
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from bluefin yet
@@ -570,6 +570,7 @@ impl MarketMaker for MM {
         let (bid_prices, bid_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_bids.into_iter().unzip();
 
         tracing::info!(
+            market = self.market.name,
             mm_ask_prices_empty = ask_prices.is_empty(),
             mm_bid_prices_empty = bid_prices.is_empty(),
             "Empty Ask and Bid Price Check"
@@ -676,6 +677,7 @@ impl MarketMaker for MM {
                     let quantity = top_ask.1;
 
                     tracing::info!(
+                        market = self.market.symbols.kucoin,
                         price = price,
                         quantity = (quantity as f64 / 100.0),
                         volume =
@@ -710,6 +712,7 @@ impl MarketMaker for MM {
                     let quantity = top_bid.1;
 
                     tracing::info!(
+                        market = self.market.symbols.kucoin,
                         price = price,
                         quantity = (quantity as f64 / 100.0),
                         volume =
