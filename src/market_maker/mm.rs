@@ -696,7 +696,7 @@ impl MarketMaker for MM {
                 if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
 
                     let price = round_to_precision(
-                        top_ask.0, //- (top_ask.0 / (2.0 * 10000.0)),
+                        top_ask.0 - (top_ask.0 / (2.0 * 10000.0)),
                         self.market.price_precision,
                     );
                     let quantity = top_ask.1;
@@ -731,7 +731,7 @@ impl MarketMaker for MM {
                 if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
 
                     let price = round_to_precision(
-                        top_bid.0, // + (top_bid.0 / (2.0 * 10000.0)),
+                        top_bid.0 + (top_bid.0 / (2.0 * 10000.0)),
                         self.market.price_precision,
                     );
                     let quantity = top_bid.1;
