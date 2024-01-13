@@ -506,11 +506,14 @@ impl Hedger for HGR {
     }
 
     fn calc_net_pos_qty(&mut self) -> (String, Decimal, bool) {
+
+        tracing::info!("Calculating net position quantity for market bluefin: {}, kucoin: {}...", 
+            self.bluefin_position.symbol, self.kucoin_position.symbol);
+
         let bluefin_market = self.market.symbols.bluefin.to_owned();
 
         // unwrap kucoin position and get quantity
         let kucoin_quantity = Decimal::from(self.kucoin_position.current_qty);  
-   
 
         let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
 
@@ -521,7 +524,8 @@ impl Hedger for HGR {
             bluefin_quantity = bluefin_quantity * Decimal::from(-1);
         }
 
-        tracing::info!("Target Quantity before check: {}", current_kucoin_qty);
+        tracing::info!("Target Quantity before check: {}, kucoin quantity: {}, bluefin quantity: {}", 
+        current_kucoin_qty.to_f64().unwrap(), current_kucoin_qty.to_f64().unwrap(), bluefin_quantity.to_f64().unwrap());
         
         let target_quantity = 
         if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_negative()) || 
@@ -532,7 +536,7 @@ impl Hedger for HGR {
                 current_kucoin_qty
             };
 
-        tracing::info!("Target Quantity after check: {}", target_quantity);
+        tracing::info!("Target Quantity after check: {}", target_quantity.to_f64().unwrap());
 
         let diff = target_quantity - bluefin_quantity;
 
@@ -547,6 +551,7 @@ impl Hedger for HGR {
             bluefin_quantity = bluefin_quantity.to_f64().unwrap(),
             order_quantity = order_quantity.to_f64().unwrap(),
             is_buy = is_buy,
+            diff = diff.to_f64().unwrap(),
             "Positions Across"
         );
 
@@ -610,19 +615,21 @@ impl Hedger for HGR {
             && ob.is_some()
         {
             {
-                tracing::debug!("order quantity as decimal: {}", order_quantity);
-                let order_quantity_f64 = order_quantity.to_f64().unwrap();
-                
-                tracing::debug!("Hedge Order Quantity {:?}", &order_quantity_f64);
-
-                let mut price = HGR::calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
-
                 let scale_factor = if self.market.name.eq("btc") {
                     10.0
                 } else {
                     //eth
                     100.0
                 };
+
+                let mut order_quantity_f64 = order_quantity.to_f64().unwrap();
+
+                order_quantity_f64 = f64::trunc(order_quantity_f64 * scale_factor) / scale_factor;
+
+                tracing::debug!("Hedge Order Quantity {:?}", &order_quantity_f64);
+
+                let mut price = HGR::calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
+
 
                 price = f64::trunc(price * scale_factor) / scale_factor;
 

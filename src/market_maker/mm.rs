@@ -595,7 +595,7 @@ impl MarketMaker for MM {
         let (bid_prices, bid_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_bids.into_iter().unzip();
 
         tracing::info!(
-            market = self.market.name,
+            market = self.market.symbols.kucoin,
             mm_ask_prices_empty = ask_prices.is_empty(),
             mm_bid_prices_empty = bid_prices.is_empty(),
             "Empty Ask and Bid Price Check"
