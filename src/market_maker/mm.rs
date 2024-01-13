@@ -569,9 +569,22 @@ impl MarketMaker for MM {
             .zip(tkr_ask_prices.into_iter().zip(tkr_ask_sizes.into_iter()))
             .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
             .filter(|&(bid_price, bid_size, tkr_ask_price, tkr_ask_size)| {
-                bid_price < tkr_ask_price
-                    && bid_price * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price
-                    && bid_size <= tkr_ask_size
+                let bid_price_check = bid_price < tkr_ask_price;
+                let bid_price_check_bps = bid_price * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price;
+                let bid_size_check = bid_size <= tkr_ask_size;
+
+                let bid_check = bid_price_check && bid_price_check_bps && bid_size_check;
+
+                tracing::info!(
+                    bid_price_check = bid_price_check,
+                    bid_price_check_bps = bid_price_check_bps,
+                    bid_size_check = bid_size_check,
+                    net_quantity = net_quantity,
+                    "Bid Price Check"
+                );
+
+                bid_check
+
             })
             .collect::<Vec<_>>()
             .iter()
