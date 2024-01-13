@@ -510,7 +510,7 @@ impl Hedger for HGR {
 
         // unwrap kucoin position and get quantity
         let kucoin_quantity = Decimal::from(self.kucoin_position.current_qty);  
-        //-0.003
+   
 
         let current_kucoin_qty = kucoin_quantity / Decimal::from(self.market.lot_size);
 
@@ -521,7 +521,8 @@ impl Hedger for HGR {
             bluefin_quantity = bluefin_quantity * Decimal::from(-1);
         }
 
-
+        tracing::info!("Target Quantity before check: {}", current_kucoin_qty);
+        
         let target_quantity = 
         if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_negative()) || 
             (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_positive()) || 
@@ -530,6 +531,8 @@ impl Hedger for HGR {
             } else {
                 current_kucoin_qty
             };
+
+        tracing::info!("Target Quantity after check: {}", target_quantity);
 
         let diff = target_quantity - bluefin_quantity;
 
