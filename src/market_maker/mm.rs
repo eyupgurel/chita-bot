@@ -511,11 +511,11 @@ impl MarketMaker for MM {
         let mut mm_asks = mm.0;
         let mut mm_bids = mm.1;
 
-        if buy_percent < 50.0 {
+        if buy_percent < 50.0 && (net_quantity * -1.0) < 0.0  {
             mm_asks = (Vec::new(), Vec::new());
         }
 
-        if buy_percent > 50.0 {
+        if buy_percent > 50.0 && (net_quantity * -1.0) > 0.0 {
             mm_bids = (Vec::new(), Vec::new());
         }
 
