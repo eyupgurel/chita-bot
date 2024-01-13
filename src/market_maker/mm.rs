@@ -534,7 +534,10 @@ impl MarketMaker for MM {
                     && ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price
                     && ask_size <= tkr_bid_size;
 
+                tracing::info!("Net Quantity is {}, ask_price_check = {}", net_quantity, ask_price_check);
+
                 if net_quantity > 0.0 {
+                    tracing::info!("ask_price_check overwritten to true");
                     ask_price_check = true;
                 } else {
                     //ignore
