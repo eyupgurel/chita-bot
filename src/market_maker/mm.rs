@@ -530,11 +530,19 @@ impl MarketMaker for MM {
             .zip(tkr_bid_prices.into_iter().zip(tkr_bid_sizes.into_iter()))
             .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
             .filter(|&(ask_price, ask_size, tkr_bid_price, tkr_bid_size)| {
-                let mut ask_price_check: bool = ask_price > tkr_bid_price
-                    && ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price
-                    && ask_size <= tkr_bid_size;
+                let ask_price_check_price: bool = ask_price > tkr_bid_price;
+                let ask_price_check_bps = ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price;
+                let ask_price_check_size = ask_size <= tkr_bid_size;
 
-                tracing::info!("Net Quantity is {}, ask_price_check = {}", net_quantity, ask_price_check);
+                let mut ask_price_check = ask_price_check_price && ask_price_check_bps && ask_price_check_size;
+
+                tracing::info!(
+                    ask_price_check_price = ask_price_check_price,
+                    ask_price_check_bps = ask_price_check_bps,
+                    ask_price_check_size = ask_price_check_size,
+                    net_quantity = net_quantity,
+                    "Ask Price Check"
+                );
 
                 if net_quantity > 0.0 {
                     tracing::info!("ask_price_check overwritten to true");
