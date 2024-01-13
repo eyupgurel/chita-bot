@@ -536,7 +536,7 @@ impl MarketMaker for MM {
 
                 let mut ask_price_check = ask_price_check_price && ask_price_check_bps && ask_price_check_size;
 
-                tracing::info!(
+                tracing::debug!(
                     ask_price_check_price = ask_price_check_price,
                     ask_price_check_bps = ask_price_check_bps,
                     ask_price_check_size = ask_price_check_size,
@@ -575,7 +575,7 @@ impl MarketMaker for MM {
 
                 let bid_check = bid_price_check && bid_price_check_bps && bid_size_check;
 
-                tracing::info!(
+                tracing::debug!(
                     bid_price_check = bid_price_check,
                     bid_price_check_bps = bid_price_check_bps,
                     bid_size_check = bid_size_check,
