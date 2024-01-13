@@ -544,7 +544,7 @@ impl MarketMaker for MM {
                     "Ask Price Check"
                 );
 
-                if net_quantity > 0.0 {
+                if (net_quantity * -1.0) > 0.0 {
                     tracing::info!("ask_price_check overwritten to true");
                     ask_price_check = true;
                 } else {
