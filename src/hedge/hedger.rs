@@ -527,11 +527,17 @@ impl Hedger for HGR {
         tracing::info!("Target Quantity before check: {}, kucoin quantity: {}, bluefin quantity: {}", 
         current_kucoin_qty.to_f64().unwrap(), current_kucoin_qty.to_f64().unwrap(), bluefin_quantity.to_f64().unwrap());
         
+        // let target_quantity = current_kucoin_qty * Decimal::from(-1);
+
         let target_quantity = 
         if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_negative()) || 
             (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_positive()) || 
             (bluefin_quantity.is_zero()) {
                 current_kucoin_qty * Decimal::from(-1)
+            } else if current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_positive() || 
+                current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_negative() {
+                    bluefin_quantity = bluefin_quantity * Decimal::from(-1);
+                    current_kucoin_qty * Decimal::from(-1)
             } else {
                 current_kucoin_qty
             };
