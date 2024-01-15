@@ -632,7 +632,7 @@ impl MarketMaker for MM {
             })
             .collect::<Vec<_>>()
             .iter()
-            .map(|&(a, b, _, _)| (a * usdt_usdc_conversion, b)) // Keep only the first two elements of each tuple
+            .map(|&(a, b, _, _)| (a, b)) // Keep only the first two elements of each tuple
             .collect();
 
         let (ask_prices, ask_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_asks.into_iter().unzip();
