@@ -30,6 +30,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 pub struct MM {
+    pub name: String,
     pub cb_config: CircuitBreakerConfig,
     pub market: Market,
     #[allow(dead_code)]
@@ -96,8 +97,11 @@ impl MM {
             mpsc::channel();
         let(tx_bluefin_trade_order_update, rx_bluefin_trade_order_update): (Sender<TradeOrderUpdate>, Receiver<TradeOrderUpdate>) = mpsc::channel();
 
+        let name = format!("Market Maker for {}", market.name);
+
         (
             MM {
+                name,
                 cb_config,
                 market,
                 bluefin_client,
@@ -684,6 +688,7 @@ impl MarketMaker for MM {
                     let quantity = top_ask.1;
 
                     tracing::info!(
+                        name = self.name,
                         market = self.market.symbols.kucoin,
                         price = price,
                         quantity = (quantity as f64 / 100.0),
@@ -719,6 +724,7 @@ impl MarketMaker for MM {
                     let quantity = top_bid.1;
 
                     tracing::info!(
+                        name = self.name,
                         market = self.market.symbols.kucoin,
                         price = price,
                         quantity = (quantity as f64 / 100.0),

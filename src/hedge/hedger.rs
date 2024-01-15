@@ -16,7 +16,6 @@ use crate::models::common::{CircuitBreakerConfig, Market, OrderBook};
 use crate::models::kucoin_models::KucoinUserPosition;
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
-use bigdecimal::Signed;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -33,6 +32,7 @@ use std::time::Instant;
 static BIGNUMBER_BASE: u128 = 1000000000000000000;
 
 pub struct HGR {
+    pub name: String,
     pub market: Market,
     pub cb_config: CircuitBreakerConfig,
     bluefin_client: BluefinClient,
@@ -94,7 +94,10 @@ impl HGR {
             "Kucoin Initial Hedger Position"
         );
 
+        let name = format!("Hedger for {} market", market.name);
+
         HGR {
+            name,
             market,
             cb_config,
             bluefin_client,
@@ -150,6 +153,7 @@ impl Hedger for HGR {
 
                     tracing::info!(
                         market = market.name,
+                        symbol = order_settlement.symbol,
                         quantity_sent_for_settlement =
                             order_settlement.quantity_sent_for_settlement,
                         is_buy = order_settlement.is_buy,
@@ -437,7 +441,7 @@ impl Hedger for HGR {
 
             match rx_bluefin_pos_update.try_recv() {
                 Ok(value) => {
-                    tracing::info!("Bluefin position update: {:?}.", value);
+                    tracing::info!("{} Bluefin position update: {:?}.", self.name, value);
                     bluefin_pos_update_disconnect_breaker.on_success();
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
@@ -466,7 +470,7 @@ impl Hedger for HGR {
 
             match rx_kucoin_pos_change.try_recv() {
                 Ok(value) => {
-                    tracing::info!("Kucoin position update: {:?}", value.1);
+                    tracing::info!("{} Kucoin position update: {:?}", self.name, value.1);
                     kucoin_pos_update_disconnect_breaker.on_success();
                     self.kucoin_position = value.1;
 
@@ -606,14 +610,6 @@ impl Hedger for HGR {
 
     fn hedge(&mut self, dry_run: bool, ob: Option<&OrderBook>, is_periodic: bool) {
 
-        // let bluefin_market = self.market.symbols.bluefin.to_owned();
-        // let bluefin_pos_before_hedging = self.bluefin_client.get_user_position(&bluefin_market);
-        // tracing::info!(
-        //     bluefin_position_before_hedging = bluefin_pos_before_hedging.quantity as f64 / BIGNUMBER_BASE as f64,
-        //     "Bluefin Position Before Hedging"
-        // );
-
-
         let (bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
 
         if order_quantity >= Decimal::from_str(&self.market.min_size).unwrap()
@@ -665,7 +661,7 @@ impl Hedger for HGR {
                         status.error.unwrap()
                     );
                 } else {
-                    tracing::info!("Placed Hedge limit order on Bluefin");
+                    tracing::info!("Placed Hedge limit order on Bluefin using {}", self.name);
 
                     let diff = if is_buy {
                         order_quantity.to_f64().unwrap()
@@ -695,12 +691,78 @@ impl Hedger for HGR {
 
 #[cfg(test)]
 pub mod tests {
+
+    use crate::models::common::CircuitBreakerConfig;
+    use crate::models::common::Market;
     use crate::models::common::OrderBook;
+    use crate::models::common::Symbol;
+    use crate::utils::get_random_decimal;
 
     use super::Hedger;
     use super::HGR;
     use bigdecimal::FromPrimitive;
+    use std::sync::mpsc;
+    use std::sync::mpsc::Receiver;
+    use std::sync::mpsc::Sender;
     use rust_decimal::Decimal;
+
+    fn mock_ob_channel() -> (Sender<OrderBook>, Receiver<OrderBook>) {
+        let asks = vec![
+            (44988.0, 0.001),
+            (44990.9, 2.222),
+            (44997.600000000006, 4.444),
+            (45001.5, 0.001),
+            (45015.200000000004, 0.001),
+        ];
+        let bids = vec![
+            (44977.9, 0.1),
+            (44976.3, 1.867),
+            (44975.0, 1.334),
+            (44972.100000000006, 2.223),
+            (44969.0, 4.447),
+        ];
+
+        let ob = OrderBook {
+            asks,
+            bids
+        };
+
+        let (tx_ob, rx_ob) = mpsc::channel();
+        let _ = tx_ob.send(ob);
+        (tx_ob, rx_ob)
+    }
+
+    fn mock_decimal_channel() -> (Sender<f64>, Receiver<f64>) {
+        let (tx_hedger, rx_hedger) = mpsc::channel();
+        let _ = tx_hedger.send(get_random_decimal());
+        (tx_hedger, rx_hedger)
+    }
+
+    fn prepare_hedger(name: String) -> HGR {
+        let market = Market {
+            name,
+            mm_lot_upper_bound: 1,
+            lot_size: 100,
+            min_size: "0.01".to_string(),
+            price_precision: 1,
+            skewing_coefficient: 1.0, 
+            symbols: Symbol {
+                binance: "ethusdt".to_string(),
+                kucoin: "ETHUSDTM".to_string(),
+                bluefin: "ETH-PERP".to_string()
+            }
+        };
+        let cb_config: CircuitBreakerConfig = CircuitBreakerConfig {
+            num_retries: 1,
+            failure_threshold: 0
+        };
+        
+        return HGR::new(
+            market, 
+            cb_config, 
+            mock_decimal_channel().0,
+            mock_ob_channel().1);
+    }
 
     #[test]
     fn test_calc_limit_order_price_buy() {

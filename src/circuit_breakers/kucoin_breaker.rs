@@ -110,8 +110,7 @@ mod test {
         };
         let config = CircuitBreakerConfig {
             num_retries: 3,
-            failure_threshold: 3,
-            loss_threshold_bps: 3.0,
+            failure_threshold: 3
         };
         let market = "ETH-PERP".to_string();
 

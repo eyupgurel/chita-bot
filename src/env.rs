@@ -95,12 +95,12 @@ pub fn env_variables() -> EnvVars {
     let periodic_hedging_enabled = std::env::var("PERIODIC_HEDGING_ENABLED")
         .expect("PERIODIC_HEDGING_ENABLED be set.")
         .parse::<bool>()
-        .unwrap();
+        .unwrap_or(false);
 
     let periodic_hedging_period = std::env::var("PERIODIC_HEDGING_PERIOD")
         .expect("PERIODIC_HEDGING_PERIOD be set.")
         .parse::<f64>()
-        .unwrap();
+        .unwrap_or(2.0);
 
     // misc
     let log_level = std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set.");
