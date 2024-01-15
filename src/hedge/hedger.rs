@@ -13,7 +13,7 @@ use crate::env::EnvVars;
 use crate::kucoin::PositionChangeEvent;
 use crate::kucoin::{Credentials, KuCoinClient};
 use crate::models::common::{CircuitBreakerConfig, Market, OrderBook};
-use crate::models::kucoin_models::KucoinUserPosition;
+use crate::models::kucoin_models::{KucoinUserPosition, KucoinTradeOrderMessage, KucoinTradeOrder};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
@@ -129,6 +129,8 @@ impl Hedger for HGR {
             mpsc::channel();
         let (tx_bluefin_order_settlement_cancellation, rx_bluefin_order_settlement_cancellation) =
             mpsc::channel();
+
+        let (tx_kucoin_trade_orders, _rx_kucoin_trade_orders) = mpsc::channel();
 
 
         let market = self.market.clone();
@@ -296,6 +298,51 @@ impl Hedger for HGR {
                 },
             );
         });
+
+        let kucoin_market_for_trade_orders = self.market.symbols.kucoin.clone();
+        let topic = "/contractMarket/tradeOrders";
+        let kucoin_private_socket_url = self.kucoin_client.get_kucoin_private_socket_url().clone();
+        let _handle_kucoin_trade_orders = thread::spawn(move || {
+            stream_kucoin_socket(
+                &kucoin_private_socket_url,
+                &kucoin_market_for_trade_orders,
+                &topic,
+                tx_kucoin_trade_orders, // Sender channel of the appropriate type
+                |msg: &str| -> Option<KucoinTradeOrder> {
+
+                    let kucoin_trade_order_msg: KucoinTradeOrderMessage =
+                        serde_json::from_str(&msg).expect("Can't parse");
+
+                    if kucoin_trade_order_msg.code.ne("\"200000\"") && kucoin_trade_order_msg.msg.is_some() {
+                        tracing::warn!("Kucoin Trade Order message dropped due to {}", kucoin_trade_order_msg.msg.unwrap());
+                        return None;
+                    } 
+
+                    let data = kucoin_trade_order_msg.data.unwrap();
+                    if kucoin_market_for_trade_orders.ne(&data.symbol) || data.type_.ne("filled") {
+                        return None;
+                    } else {
+                        let volume = data.price * data.filled_size;
+
+                        tracing::info!(
+                            market = data.symbol,
+                            side = data.side,
+                            price = data.price,
+                            size = data.size,
+                            filled_size = data.filled_size,
+                            match_size = data.match_size,
+                            match_price = data.match_price,
+                            volume = volume,
+                            "Kucoin Trade Order"
+                        );
+                        return Some(data);
+                    }
+                },
+                &"orderChange",
+                true,
+            );
+        });
+
 
         let kucoin_market_for_pos_update = self.market.symbols.kucoin.clone();
         let topic = "/contract/position";

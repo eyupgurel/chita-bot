@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 use crate::models::common::OrderBook;
+use rust_decimal::Decimal;
+use std::str::FromStr;
+use bigdecimal::ToPrimitive;
 use crate::models::common::deserialize_as_mix_tuples;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -176,4 +179,80 @@ pub struct KucoinUserPosition {
     pub unrealised_roe_pcnt: f64,
     pub unrealised_pnl_pcnt: f64,
     pub settle_currency: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct KucoinTradeOrderMessage {
+    pub code: String,
+    pub msg: Option<String>,
+    pub data: Option<KucoinTradeOrder>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct KucoinTradeOrder {
+    pub order_id: String, // Order ID
+    pub symbol: String, // symbol
+    #[serde(rename = "type")]
+    pub type_: String, // Message Type: "open", "match", "filled", "canceled", "update"
+    pub status: String, // Order Status: "match", "open", "done"
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_option_kucoin")]
+    pub match_size: Option<f64>, // Match Size (when the type is "match")
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_option_kucoin")]
+    pub match_price: Option<f64>, // Match Price (when the type is "match") String
+    pub order_type: String, // Order Type, "market" indicates market order, "limit" indicates limit order. String
+    #[serde(deserialize_with = "deserialize_buy_side_kucoin")]
+    pub side: bool, // Trading direction,include buy and sell
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub price: f64, // Order Price. String
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub size: f64, // Order Size. String
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub remain_size: f64, // Remaining Size for Trading. String
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub filled_size: f64, // Filled Size. String
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub canceled_size: f64, // In the update message, the Size of order reduced. String
+    pub trade_id: Option<String>, // Trade ID (when the type is "match")
+    pub client_oid: String, // clientOid
+    pub order_time: u128, // Order Time
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub old_size: f64, // Size Before Update (when the type is "update"). String
+    pub liquidity: String, // Trading direction, buy or sell in taker
+    pub ts: u128 // Timestamp
+}
+
+pub fn deserialize_to_f64_via_decimal_kucoin<'de, D>(deserializer: D) -> Result<f64, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let parsed = Decimal::from_str(&s).map_err(serde::de::Error::custom)?;
+    let divisor = Decimal::from_str("100").unwrap();
+    let decimal_value = parsed / divisor;
+    Ok(decimal_value.to_f64().unwrap())
+}
+
+pub fn deserialize_to_f64_via_decimal_option_kucoin<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    if s.is_empty() {
+        return Ok(None);
+    }
+    let parsed = Decimal::from_str(&s).map_err(serde::de::Error::custom)?;
+    let divisor = Decimal::from_str("100").unwrap();
+    let decimal_value = parsed / divisor;
+    Ok(Some(decimal_value.to_f64().unwrap()))
+}
+
+pub fn deserialize_buy_side_kucoin<'de, D>(deserializer: D) -> Result<bool, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let res = s.eq("buy");
+    Ok(res)
 }
