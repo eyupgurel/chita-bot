@@ -707,7 +707,8 @@ impl Hedger for HGR {
             let bluefin_market = self.market.symbols.bluefin.to_owned();
             self.bluefin_position = self.bluefin_client.get_user_position(&bluefin_market);
             tracing::info!(
-                bluefin_position_before_hedging = self.bluefin_position.quantity as f64 / BIGNUMBER_BASE as f64,
+                bluefin_position_before_hedging = self.bluefin_position.quantity as f64 / 
+                    BIGNUMBER_BASE as f64 * (if self.bluefin_position.side { 1.0 } else { -1.0 }),
                 "Bluefin Position Before Periodic Hedging"
             );
         }
