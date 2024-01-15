@@ -21,6 +21,7 @@ use crate::sockets::common::OrderBookStream;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
 use crate::sockets::kucoin_utils::get_kucoin_url;
+use crate::sockets::kucoin_utils::get_kucoin_spot_url;
 #[allow(unused_imports)]
 use log::{debug, error, info};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
@@ -223,7 +224,7 @@ impl MarketMaker for MM {
         let topic = "/market/ticker";
         let _handle_kucoin_usdt_usdc_conversion = thread::spawn(move || {
             stream_kucoin_socket(
-                &get_kucoin_url(),
+                &get_kucoin_spot_url(),
                 &kucoin_market_for_usdt_usdc_conversion.clone(),
                 &topic,
                 tx_kucoin_usdt_usdc_conversion, // Sender channel of the appropriate type
