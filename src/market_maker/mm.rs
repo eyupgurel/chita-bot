@@ -368,7 +368,6 @@ impl MarketMaker for MM {
                 Ok(value) => {
                     tracing::debug!("bluefin ob: {:?}", value);
                     bluefin_ob_disconnect_breaker.on_success();
-                    let _ = self.tx_bluefin_hedger_ob.send(value.clone());
                     ob_map.insert("bluefin".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -391,6 +390,7 @@ impl MarketMaker for MM {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         self.market_make(ref_ob, mm_ob, &value, buy_percent, 0.0, net_quantity);
                     }
+                    let _ = self.tx_bluefin_hedger_ob.send(value.clone());
                     ob_map.insert("bluefin".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
