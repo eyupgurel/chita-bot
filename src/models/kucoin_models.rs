@@ -226,7 +226,7 @@ pub struct KucoinTradeOrder {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SpotTradingTickerMessage {
-    pub code: String,
+    pub code: Option<String>,
     pub msg: Option<String>,
     pub data: Option<SpotTradingTicker>,
 }
