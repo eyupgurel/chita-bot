@@ -234,7 +234,7 @@ pub struct SpotTradingTickerMessage {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SpotTradingTicker {
-    pub sequence: u128,
+    pub sequence: String, //u128
     #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
     pub price: f64, // Last traded price
     #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
