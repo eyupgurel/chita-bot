@@ -53,7 +53,7 @@ pub fn get_kucoin_socket(
         id, resolved_topic, is_private
     );
 
-    tracing::info!("Subscribing to kucoin socket for market: {:?} and topic: {:?}", &market, &topic);
+    tracing::info!("Subscribing to kucoin socket for market: {:?} and topic: {:?}", &market, &resolved_topic);
 
     // Send the message
     kucoin_socket
@@ -71,13 +71,13 @@ pub fn get_kucoin_socket(
         }
     };
 
-    tracing::info!("Kucoin socket {} ack msg {}", &topic, &ack_msg);
+    tracing::info!("Kucoin socket {} ack msg {}", &resolved_topic, &ack_msg);
 
     let ack: Comm = serde_json::from_str(&ack_msg).expect("Can't parse");
 
     //Panic on error during Ack handshake
     if ack.type_.eq("error") {
-        panic!("Error: {:?} while getting ack message back from Kucoin for topic {:?}", &ack.data.unwrap_or("No Error Message".to_string()), &topic);
+        panic!("Error: {:?} while getting ack message back from Kucoin for topic {:?}", &ack.data.unwrap_or("No Error Message".to_string()), &resolved_topic);
     }
 
     return (kucoin_socket, ack);
