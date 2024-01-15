@@ -398,31 +398,33 @@ impl Hedger for HGR {
         loop {
             match rx_bluefin_order_settlement_update.try_recv() {
                 Ok(value) => {
-                    let data = value.unwrap();
-                    tracing::info!("Bluefin Order Settlement update: {:?}", data);
-                    let curr_side: i128 = if self.bluefin_position.side { 1 } else { -1 };
-                    let new_qty = (self.bluefin_position.quantity as i128 * curr_side)
-                        + ((data.quantity_sent_for_settlement as i128)
-                            * (if data.is_buy { 1 } else { -1 }));
+                    if value.is_some() {
+                        let data = value.unwrap();
+                        tracing::info!("Bluefin Order Settlement update: {:?}", data);
+                        let curr_side: i128 = if self.bluefin_position.side { 1 } else { -1 };
+                        let new_qty = (self.bluefin_position.quantity as i128 * curr_side)
+                            + ((data.quantity_sent_for_settlement as i128)
+                                * (if data.is_buy { 1 } else { -1 }));
 
-                    tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
+                        tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
 
-                    self.bluefin_position.quantity = new_qty.abs() as u128;
-                    self.bluefin_position.side = if new_qty > 0 { true } else { false };
+                        self.bluefin_position.quantity = new_qty.abs() as u128;
+                        self.bluefin_position.side = if new_qty > 0 { true } else { false };
 
-                    tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
+                        tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
 
-                    let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
-                    let diff = if is_buy {
-                        order_quantity.to_f64().unwrap()
-                    } else {
-                        order_quantity.set_sign_negative(true);
-                        order_quantity.to_f64().unwrap()
-                    };
+                        let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
+                        let diff = if is_buy {
+                            order_quantity.to_f64().unwrap()
+                        } else {
+                            order_quantity.set_sign_negative(true);
+                            order_quantity.to_f64().unwrap()
+                        };
 
-                    self.tx_hedger
-                        .send(diff.to_f64().unwrap())
-                        .expect("Could not send current net position from hedger to mm!");
+                        self.tx_hedger
+                            .send(diff.to_f64().unwrap())
+                            .expect("Could not send current net position from hedger to mm!");
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
@@ -432,31 +434,33 @@ impl Hedger for HGR {
 
             match rx_bluefin_order_settlement_cancellation.try_recv() {
                 Ok(value) => {
-                    let data = value.unwrap();
-                    tracing::info!("Bluefin Order Settlement Cancellation: {:?}", data);
-                    let curr_side: i128 = if self.bluefin_position.side { 1 } else { -1 };
-                    let new_qty = (self.bluefin_position.quantity as i128 * curr_side)
-                        - ((data.quantity_sent_for_cancellation as i128)
-                            * (if data.is_buy { 1 } else { -1 }));
+                    if value.is_some() {
+                        let data = value.unwrap();
+                        tracing::info!("Bluefin Order Settlement Cancellation: {:?}", data);
+                        let curr_side: i128 = if self.bluefin_position.side { 1 } else { -1 };
+                        let new_qty = (self.bluefin_position.quantity as i128 * curr_side)
+                            - ((data.quantity_sent_for_cancellation as i128)
+                                * (if data.is_buy { 1 } else { -1 }));
 
-                    tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
+                        tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
 
-                    self.bluefin_position.quantity = new_qty.abs() as u128;
-                    self.bluefin_position.side = if new_qty > 0 { true } else { false };
+                        self.bluefin_position.quantity = new_qty.abs() as u128;
+                        self.bluefin_position.side = if new_qty > 0 { true } else { false };
 
-                    tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
+                        tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
 
-                    let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
-                    let diff = if is_buy {
-                        order_quantity.to_f64().unwrap()
-                    } else {
-                        order_quantity.set_sign_negative(true);
-                        order_quantity.to_f64().unwrap()
-                    };
+                        let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
+                        let diff = if is_buy {
+                            order_quantity.to_f64().unwrap()
+                        } else {
+                            order_quantity.set_sign_negative(true);
+                            order_quantity.to_f64().unwrap()
+                        };
 
-                    self.tx_hedger
-                        .send(diff.to_f64().unwrap())
-                        .expect("Could not send current net position from hedger to mm!");
+                        self.tx_hedger
+                            .send(diff.to_f64().unwrap())
+                            .expect("Could not send current net position from hedger to mm!");
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
@@ -468,9 +472,11 @@ impl Hedger for HGR {
 
             match rx_bluefin_pos_update.try_recv() {
                 Ok(value) => {
-                    let data = value.unwrap();
-                    tracing::info!("{} Bluefin position update: {:?}.", self.name, data);
-                    bluefin_pos_update_disconnect_breaker.on_success();
+                    if value.is_some() {
+                        let data = value.unwrap();
+                        tracing::info!("{} Bluefin position update: {:?}.", self.name, data);
+                        bluefin_pos_update_disconnect_breaker.on_success();
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
@@ -498,13 +504,15 @@ impl Hedger for HGR {
 
             match rx_kucoin_pos_change.try_recv() {
                 Ok(value) => {
-                    let data = value.1.unwrap();
-                    tracing::info!("{} Kucoin position update: {:?}", self.name, data);
-                    kucoin_pos_update_disconnect_breaker.on_success();
-                    self.kucoin_position = data;
+                    if value.1.is_some() {
+                        let data = value.1.unwrap();
+                        tracing::info!("{} Kucoin position update: {:?}", self.name, data);
+                        kucoin_pos_update_disconnect_breaker.on_success();
+                        self.kucoin_position = data;
 
-                    tracing::info!(periodic_hedge = false, "Kucoin Position Hedger");
-                    self.hedge(dry_run, ob_map.get(&bluefin), false);
+                        tracing::info!(periodic_hedge = false, "Kucoin Position Hedger");
+                        self.hedge(dry_run, ob_map.get(&bluefin), false);
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
