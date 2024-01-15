@@ -104,6 +104,10 @@ pub mod client {
 
             let resp: Response = serde_json::from_str(&body).expect("JSON Decoding failed");
 
+            if resp.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
             if !resp.code.eq("\"200000\"") && resp.msg.is_some() {
                 let error_code = resp.code.to_string().clone().parse::<i128>().unwrap();
                 let error_msg = resp.msg.clone().unwrap_or("".to_string());
@@ -145,6 +149,10 @@ pub mod client {
                     .as_str(),
             )
             .unwrap();
+
+            if resp.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
 
             if !resp.code.eq("\"200000\"") && resp.msg.is_some() {
                 let error_code = resp.code.to_string().clone().parse::<i128>().unwrap();
@@ -203,6 +211,10 @@ pub mod client {
 
             let resp: RecentFillsResponse =
                 serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            if resp.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
 
             if !resp.code.eq("\"200000\"") && resp.msg.is_some() {
                 let error_code = resp.code.to_string().clone().parse::<i128>().unwrap();
@@ -297,6 +309,10 @@ pub mod client {
 
             let resp: FillsResponse = serde_json::from_str(&res).expect("JSON Decoding failed");
 
+            if resp.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
             if !resp.code.eq("\"200000\"") && resp.msg.is_some() {
                 let error_code = resp.code.to_string().clone().parse::<i128>().unwrap();
                 let error_msg = resp.msg.clone().unwrap_or("".to_string());
@@ -366,6 +382,10 @@ pub mod client {
             let transaction_history: TransactionHistory =
                 serde_json::from_str(&res).expect("Can't parse");
 
+            if transaction_history.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
                 if !transaction_history.code.eq("\"200000\"") && transaction_history.msg.is_some() {
                     let error_code = transaction_history.code.to_string().clone().parse::<i128>().unwrap();
                     let error_msg = transaction_history.msg.clone().unwrap_or("".to_string());
@@ -396,6 +416,10 @@ pub mod client {
                 .unwrap();
 
             let position_list: PositionList = serde_json::from_str(&res).expect("Can't parse");
+
+            if position_list.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
 
             if !position_list.code.eq("\"200000\"") && position_list.msg.is_some() {
                 let error_code = position_list.code.to_string().clone().parse::<i128>().unwrap();
