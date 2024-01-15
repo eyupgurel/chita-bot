@@ -630,12 +630,15 @@ impl Hedger for HGR {
         if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_negative()) || 
             (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_positive()) || 
             (bluefin_quantity.is_zero()) {
+                tracing::info!("Inverted signs, flipping kucoin qty");
                 current_kucoin_qty * Decimal::from(-1)
-            } else if current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_positive() || 
-                current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_negative() {
+            } else if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_positive()) || 
+                (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_negative()) {
+                    tracing::info!("Same signs, flipping bluefin and kucoin qty");
                     bluefin_quantity = bluefin_quantity * Decimal::from(-1);
                     current_kucoin_qty * Decimal::from(-1)
             } else {
+                tracing::info!("Keeping kucoin qty same");
                 current_kucoin_qty
             };
 
