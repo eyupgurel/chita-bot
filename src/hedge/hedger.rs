@@ -621,7 +621,7 @@ impl Hedger for HGR {
             bluefin_quantity = bluefin_quantity * Decimal::from(-1);
         }
 
-        tracing::debug!("Target Quantity before check: {}, kucoin quantity: {}, bluefin quantity: {}", 
+        tracing::info!("Target Quantity before check: {}, kucoin quantity: {}, bluefin quantity: {}", 
         current_kucoin_qty.to_f64().unwrap(), current_kucoin_qty.to_f64().unwrap(), bluefin_quantity.to_f64().unwrap());
         
         // let target_quantity = current_kucoin_qty * Decimal::from(-1);
@@ -639,7 +639,7 @@ impl Hedger for HGR {
                 current_kucoin_qty
             };
 
-        tracing::debug!("Target Quantity after check: {}", target_quantity.to_f64().unwrap());
+        tracing::info!("Target Quantity after check: {}", target_quantity.to_f64().unwrap());
 
         let diff = target_quantity - bluefin_quantity;
 
