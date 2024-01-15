@@ -40,6 +40,7 @@ pub fn get_kucoin_socket(
     let id = generate_random_number_of_digits(13);
 
     let resolved_topic = if market.is_empty() { topic.to_string() } else { format!("{}:{}", topic, market) };
+    tracing::info!("Resolved Topic: {}", resolved_topic);
 
     let sub_message = format!(
         r#"{{
