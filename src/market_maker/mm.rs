@@ -238,7 +238,7 @@ impl MarketMaker for MM {
                         return Some(kucoin_usdt_usdc_ticker.data.unwrap());
                     }
                 },
-                "",
+                "trade.ticker",
                 false,
             );
         });
