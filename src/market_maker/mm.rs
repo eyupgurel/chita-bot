@@ -230,7 +230,7 @@ impl MarketMaker for MM {
                 tx_kucoin_usdt_usdc_conversion, // Sender channel of the appropriate type
                 |msg: &str| -> Option<SpotTradingTicker> {
 
-                    tracing::info!("USDT_USDC ticker {}", &msg);
+                    tracing::debug!("USDT_USDC ticker {}", &msg);
 
                     let kucoin_usdt_usdc_ticker: SpotTradingTickerMessage =
                         serde_json::from_str(&msg).expect("Can't parse");
