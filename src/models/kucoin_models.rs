@@ -197,7 +197,7 @@ pub struct KucoinTradeOrder {
     #[serde(rename = "type")]
     pub type_: String, // Message Type: "open", "match", "filled", "canceled", "update"
     pub status: String, // Order Status: "match", "open", "done"
-    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_option_kucoin")]
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_option_kucoin")]
     pub match_size: Option<f64>, // Match Size (when the type is "match")
     #[serde(deserialize_with = "deserialize_to_f64_via_decimal_option_kucoin")]
     pub match_price: Option<f64>, // Match Price (when the type is "match") String
@@ -206,24 +206,73 @@ pub struct KucoinTradeOrder {
     pub side: bool, // Trading direction,include buy and sell
     #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
     pub price: f64, // Order Price. String
-    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
     pub size: f64, // Order Size. String
-    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
     pub remain_size: f64, // Remaining Size for Trading. String
-    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
     pub filled_size: f64, // Filled Size. String
-    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
     pub canceled_size: f64, // In the update message, the Size of order reduced. String
     pub trade_id: Option<String>, // Trade ID (when the type is "match")
     pub client_oid: String, // clientOid
     pub order_time: u128, // Order Time
-    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
     pub old_size: f64, // Size Before Update (when the type is "update"). String
     pub liquidity: String, // Trading direction, buy or sell in taker
     pub ts: u128 // Timestamp
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SpotTradingTickerMessage {
+    pub code: String,
+    pub msg: Option<String>,
+    pub data: Option<SpotTradingTicker>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SpotTradingTicker {
+    pub sequence: u128,
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub price: f64, // Last traded price
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
+    pub size: f64, //  Last traded amount
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub best_ask: f64, // Best ask price
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
+    pub best_ask_size: f64, // Best ask size
+    #[serde(deserialize_with = "deserialize_to_f64_via_decimal_kucoin")]
+    pub best_bid: f64, // Best bid price
+    #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
+    pub best_bid_size: f64, // Best bid size
+    #[serde(rename = "Time")]
+	pub time: u128	//The matching time of the latest transaction
+}
+
 pub fn deserialize_to_f64_via_decimal_kucoin<'de, D>(deserializer: D) -> Result<f64, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let parsed = Decimal::from_str(&s).map_err(serde::de::Error::custom)?;
+    Ok(parsed.to_f64().unwrap())
+}
+
+pub fn deserialize_to_f64_via_decimal_option_kucoin<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    if s.is_empty() {
+        return Ok(None);
+    }
+    let parsed = Decimal::from_str(&s).map_err(serde::de::Error::custom)?;
+    Ok(Some(parsed.to_f64().unwrap()))
+}
+
+pub fn deserialize_to_f64_size_via_decimal_kucoin<'de, D>(deserializer: D) -> Result<f64, D::Error>
     where
         D: serde::Deserializer<'de>,
 {
@@ -234,7 +283,7 @@ pub fn deserialize_to_f64_via_decimal_kucoin<'de, D>(deserializer: D) -> Result<
     Ok(decimal_value.to_f64().unwrap())
 }
 
-pub fn deserialize_to_f64_via_decimal_option_kucoin<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+pub fn deserialize_to_f64_size_via_decimal_option_kucoin<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
     where
         D: serde::Deserializer<'de>,
 {

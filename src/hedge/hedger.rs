@@ -13,9 +13,10 @@ use crate::env::EnvVars;
 use crate::kucoin::PositionChangeEvent;
 use crate::kucoin::{Credentials, KuCoinClient};
 use crate::models::common::{CircuitBreakerConfig, Market, OrderBook};
-use crate::models::kucoin_models::{KucoinUserPosition, KucoinTradeOrderMessage, KucoinTradeOrder};
+use crate::models::kucoin_models::{KucoinUserPosition, KucoinTradeOrderMessage, KucoinTradeOrder, SpotTradingTickerMessage, SpotTradingTicker};
 use crate::sockets::bluefin_private_socket::stream_bluefin_private_socket;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
+use crate::sockets::kucoin_utils::get_kucoin_url;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -131,7 +132,6 @@ impl Hedger for HGR {
             mpsc::channel();
 
         let (tx_kucoin_trade_orders, _rx_kucoin_trade_orders) = mpsc::channel();
-
 
         let market = self.market.clone();
         
@@ -443,6 +443,7 @@ impl Hedger for HGR {
         let periodic_hedging_period = vars.periodic_hedging_period;
 
         loop {
+            
             match rx_bluefin_order_settlement_update.try_recv() {
                 Ok(value) => {
                     if value.is_some() {
@@ -558,7 +559,11 @@ impl Hedger for HGR {
                         self.kucoin_position = data;
 
                         tracing::info!(periodic_hedge = false, "Kucoin Position Hedger");
-                        self.hedge(dry_run, ob_map.get(&bluefin), false);
+                        self.hedge(
+                            dry_run, 
+                            ob_map.get(&bluefin),
+                            false
+                        );
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
@@ -576,7 +581,11 @@ impl Hedger for HGR {
                     && ob_map.contains_key(&bluefin))
             {
                 tracing::debug!(periodic_hedge = true, "Periodic Hedger");
-                self.hedge(dry_run, ob_map.get(&bluefin), true);
+                self.hedge(
+                    dry_run,
+                    ob_map.get(&bluefin),
+                    true
+                );
                 last_hedge_time = Instant::now();
             }
         }
@@ -722,7 +731,6 @@ impl Hedger for HGR {
                 tracing::debug!("Hedge Order Quantity {:?}", &order_quantity_f64);
 
                 let mut price = HGR::calc_limit_order_price(order_quantity, is_buy, ob.unwrap());
-
 
                 price = f64::trunc(price * scale_factor) / scale_factor;
 

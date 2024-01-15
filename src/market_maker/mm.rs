@@ -7,6 +7,8 @@ use crate::env::EnvVars;
 use crate::kucoin::{AvailableBalance, CallResponse, Credentials, KuCoinClient};
 use crate::models::binance_models::DepthUpdate;
 use crate::models::bluefin_models::OrderbookDepthUpdate;
+use crate::models::kucoin_models::SpotTradingTicker;
+use crate::models::kucoin_models::SpotTradingTickerMessage;
 use crate::models::common::{
     abs, add, divide, round_to_precision, subtract, BookOperations, CircuitBreakerConfig, Market,
     OrderBook,
@@ -157,6 +159,7 @@ pub trait MarketMaker {
         ref_book: &OrderBook,
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
+        usdt_usdc_conversion: f64,
         buy_percent: f64,
         shift: f64,
         net_quantity: f64,
@@ -194,6 +197,7 @@ impl MarketMaker for MM {
         let (tx_binance_ob_diff, rx_binance_ob_diff) = mpsc::channel();
         let (tx_bluefin_ob, rx_bluefin_ob) = mpsc::channel();
         let (tx_bluefin_ob_diff, rx_bluefin_ob_diff) = mpsc::channel();
+        let (tx_kucoin_usdt_usdc_conversion, rx_kucoin_usdt_usdc_conversion) = mpsc::channel();
 
         let kucoin_market = self.market.symbols.kucoin.to_owned();
         let kucoin_market_for_ob = kucoin_market.clone();
@@ -209,6 +213,30 @@ impl MarketMaker for MM {
                         serde_json::from_str(&msg).expect("Can't parse");
                     let ob: OrderBook = parsed_kucoin_ob.into();
                     ob
+                },
+                "",
+                false,
+            );
+        });
+
+        let kucoin_market_for_usdt_usdc_conversion = "USDT-USDC".to_string();
+        let topic = "/market/ticker:USDT-USDC";
+        let _handle_kucoin_usdt_usdc_conversion = thread::spawn(move || {
+            stream_kucoin_socket(
+                &get_kucoin_url(),
+                &kucoin_market_for_usdt_usdc_conversion.clone(),
+                &topic,
+                tx_kucoin_usdt_usdc_conversion, // Sender channel of the appropriate type
+                |msg: &str| -> Option<SpotTradingTicker> {
+
+                    let kucoin_usdt_usdc_ticker: SpotTradingTickerMessage =
+                        serde_json::from_str(&msg).expect("Can't parse");
+                    
+                    if kucoin_usdt_usdc_ticker.data.is_none() {
+                        return None;
+                    } else {
+                        return Some(kucoin_usdt_usdc_ticker.data.unwrap());
+                    }
                 },
                 "",
                 false,
@@ -285,7 +313,23 @@ impl MarketMaker for MM {
             bluefin_market.clone(),
         );
 
+        let mut usdt_usdc_conversion_map: HashMap<String, f64> = HashMap::new();
+        let kucoin_usdt_usdc_conversion_key: String = "kucoin_usdt_usdc_conversion".to_string();
+
         loop {
+            match rx_kucoin_usdt_usdc_conversion.try_recv() {
+                Ok(value) => {
+                    if value.1.is_some() {
+                        let data = value.1.unwrap();
+                        usdt_usdc_conversion_map.insert(kucoin_usdt_usdc_conversion_key.clone(), data.price);
+                    }
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    tracing::info!("Kucoin USDT-USDC worker has disconnected!");
+                }
+            }
+
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
                     tracing::debug!("kucoin ob: {:?}", value);
@@ -311,7 +355,15 @@ impl MarketMaker for MM {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, tkr_ob, buy_percent, 0.0, net_quantity);
+                        let usdt_usdc_conversion = usdt_usdc_conversion_map.get(&kucoin_usdt_usdc_conversion_key).expect("Key not found").clone();
+                        self.market_make(
+                            ref_ob, 
+                            mm_ob, 
+                            tkr_ob, 
+                            usdt_usdc_conversion,
+                            buy_percent, 
+                            0.0, 
+                            net_quantity);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -349,7 +401,8 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        self.market_make(&value, mm_ob, tkr_ob, buy_percent, 0.0, net_quantity);
+                        let usdt_usdc_conversion = usdt_usdc_conversion_map.get(&kucoin_usdt_usdc_conversion_key).expect("Key not found").clone();
+                        self.market_make(&value, mm_ob, tkr_ob, usdt_usdc_conversion, buy_percent, 0.0, net_quantity);
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -388,7 +441,8 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
-                        self.market_make(ref_ob, mm_ob, &value, buy_percent, 0.0, net_quantity);
+                        let usdt_usdc_conversion = usdt_usdc_conversion_map.get(&kucoin_usdt_usdc_conversion_key).expect("Key not found").clone();
+                        self.market_make(ref_ob, mm_ob, &value, usdt_usdc_conversion, buy_percent, 0.0, net_quantity);
                     }
                     let _ = self.tx_bluefin_hedger_ob.send(value.clone());
                     ob_map.insert("bluefin".to_string(), value);
@@ -479,6 +533,7 @@ impl MarketMaker for MM {
         ref_book: &OrderBook,
         mm_book: &OrderBook,
         tkr_book: &OrderBook,
+        usdt_usdc_conversion: f64,
         buy_percent: f64,
         shift: f64,
         net_quantity: f64,
@@ -516,8 +571,8 @@ impl MarketMaker for MM {
             .zip(tkr_bid_prices.into_iter().zip(tkr_bid_sizes.into_iter()))
             .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
             .filter(|&(ask_price, ask_size, tkr_bid_price, tkr_bid_size)| {
-                let ask_price_check_price: bool = ask_price > tkr_bid_price;
-                let ask_price_check_bps = ask_price * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price;
+                let ask_price_check_price: bool = ask_price * usdt_usdc_conversion > tkr_bid_price;
+                let ask_price_check_bps = ask_price * usdt_usdc_conversion * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price;
                 let ask_price_check_size = ask_size <= tkr_bid_size;
 
                 let mut ask_price_check = ask_price_check_price && ask_price_check_bps && ask_price_check_size;
@@ -555,8 +610,8 @@ impl MarketMaker for MM {
             .zip(tkr_ask_prices.into_iter().zip(tkr_ask_sizes.into_iter()))
             .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
             .filter(|&(bid_price, bid_size, tkr_ask_price, tkr_ask_size)| {
-                let bid_price_check = bid_price < tkr_ask_price;
-                let bid_price_check_bps = bid_price * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price;
+                let bid_price_check = bid_price * usdt_usdc_conversion < tkr_ask_price;
+                let bid_price_check_bps = bid_price * usdt_usdc_conversion * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price;
                 let bid_size_check = bid_size <= tkr_ask_size;
 
                 let bid_check = bid_price_check && bid_price_check_bps && bid_size_check;
@@ -574,7 +629,7 @@ impl MarketMaker for MM {
             })
             .collect::<Vec<_>>()
             .iter()
-            .map(|&(a, b, _, _)| (a, b)) // Keep only the first two elements of each tuple
+            .map(|&(a, b, _, _)| (a * usdt_usdc_conversion, b)) // Keep only the first two elements of each tuple
             .collect();
 
         let (ask_prices, ask_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_asks.into_iter().unzip();
