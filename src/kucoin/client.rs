@@ -5,10 +5,13 @@ pub mod client {
     use base64::encode;
     use hmac::{Hmac, Mac};
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+    use reqwest::blocking::RequestBuilder;
     use serde_json::{json, Value};
     use sha2::Sha256;
     use snailquote::unescape;
+    use warp::filters::method::head;
     use std::collections::HashMap;
+    use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[allow(unused)]
@@ -92,6 +95,9 @@ pub mod client {
 
             let headers: HeaderMap = self.sign_headers(endpoint.clone(), None, None, Method::POST);
 
+            let url_clone = url.clone();
+            let headers_clone = headers.clone();
+
             let res = self.client.post(url).headers(headers).send().unwrap();
 
             let body = res.text().unwrap();
@@ -107,6 +113,13 @@ pub mod client {
                     error_message = error_msg,
                     "Kucoin Private Token REST API"
                 );
+
+                //Sleep for x seconds and try again
+                thread::sleep(Duration::from_secs(1));
+                let res = self.client.post(url_clone).headers(headers_clone).send().unwrap();
+                let body = res.text().unwrap();
+                let resp: Response = serde_json::from_str(&body).expect("JSON Decoding failed");
+                return resp.data.unwrap().token
             }
 
             resp.data.unwrap().token
@@ -142,6 +155,20 @@ pub mod client {
                     error_message = error_msg,
                     "Kucoin Token REST API"
                 );
+
+                //Sleep for x seconds and try again
+                thread::sleep(Duration::from_secs(1));
+                let new_res: Response = serde_json::from_str(
+                    client
+                        .post(onboarding_url)
+                        .send()
+                        .unwrap()
+                        .text()
+                        .unwrap()
+                        .as_str(),
+                )
+                .unwrap();
+                return new_res.data.unwrap().token
             }
 
             return resp.data.unwrap().token;
@@ -161,6 +188,9 @@ pub mod client {
 
             let headers: HeaderMap =
                 self.sign_headers(endpoint.clone(), None, Some(query), Method::GET);
+
+            let url_clone = url.clone();
+            let headers_clone = headers.clone();
 
             let res: String = self
                 .client
@@ -183,6 +213,22 @@ pub mod client {
                     error_message = error_msg,
                     "Kucoin Recent Fills REST API"
                 );
+
+                //Sleep for x seconds and try again
+                thread::sleep(Duration::from_secs(1));
+                let res: String = self
+                    .client
+                    .get(url_clone)
+                    .headers(headers_clone)
+                    .send()
+                    .unwrap()
+                    .text()
+                    .unwrap();
+
+                let resp: RecentFillsResponse =
+                    serde_json::from_str(&res).expect("JSON Decoding failed");
+
+                return resp;
             }
 
             return resp;
@@ -237,6 +283,9 @@ pub mod client {
             let headers: HeaderMap =
                 self.sign_headers(endpoint.clone(), None, Some(query), Method::GET);
 
+            let url_clone = url.clone();
+            let headers_clone = headers.clone();
+
             let res: String = self
                 .client
                 .get(url)
@@ -257,6 +306,20 @@ pub mod client {
                     error_message = error_msg,
                     "Kucoin Fills REST API"
                 );
+
+                //Sleep for x seconds and try again
+                thread::sleep(Duration::from_secs(1));
+                let res: String = self
+                    .client
+                    .get(url_clone)
+                    .headers(headers_clone)
+                    .send()
+                    .unwrap()
+                    .text()
+                    .unwrap();
+
+                let resp: FillsResponse = serde_json::from_str(&res).expect("JSON Decoding failed");
+                return resp;
             }
 
             return resp;
