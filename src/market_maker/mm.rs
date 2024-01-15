@@ -2,7 +2,6 @@ use crate::bluefin::{AccountData, BluefinClient};
 use crate::circuit_breakers::cancel_all_orders_breaker::CancelAllOrdersCircuitBreaker;
 use crate::circuit_breakers::circuit_breaker::{CircuitBreaker, CircuitBreakerBase, State};
 use crate::circuit_breakers::kucoin_breaker::KuCoinBreaker;
-use crate::circuit_breakers::threshold_breaker::{ClientType, ThresholdCircuitBreaker};
 use crate::env;
 use crate::env::EnvVars;
 use crate::kucoin::{AvailableBalance, CallResponse, Credentials, KuCoinClient};
@@ -282,12 +281,6 @@ impl MarketMaker for MM {
             bluefin_market.clone(),
         );
 
-        //Account Balance threshold breaker
-        let mut account_balance_threshold_breaker = ThresholdCircuitBreaker::new(
-            "Account Balance Threshold breaker".to_string(),
-            self.cb_config.clone(),
-        );
-
         loop {
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
@@ -423,7 +416,7 @@ impl MarketMaker for MM {
             match self.rx_bluefin_trade_order_update.try_recv() {
                 Ok(value) => {
                     tracing::info!("Bluefin Trade Order Update {:?}", value);
-                    // account_balance_threshold_breaker.push_bluefin_commission(value.commission);
+
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -438,12 +431,6 @@ impl MarketMaker for MM {
                     let balance = value.data.available_balance.parse::<f64>().unwrap()
                         + value.data.hold_balance.parse::<f64>().unwrap();
                     tracing::debug!("Kucoin available balance: {:?}", &balance);
-                    // account_balance_threshold_breaker.check_user_balance(
-                    //     balance,
-                    //     ClientType::KUCOIN,
-                    //     &bluefin_market,
-                    //     vars.dry_run,
-                    // );
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -456,12 +443,7 @@ impl MarketMaker for MM {
             match self.rx_account_data.try_recv() {
                 Ok(value) => {
                     tracing::debug!("Bluefin available balance: {:?}", value.account_value);
-                    // account_balance_threshold_breaker.check_user_balance(
-                    //     value.account_value,
-                    //     ClientType::BLUEFIN,
-                    //     &bluefin_market,
-                    //     vars.dry_run,
-                    // );
+
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from bluefin yet
