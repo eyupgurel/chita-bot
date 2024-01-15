@@ -220,7 +220,7 @@ impl MarketMaker for MM {
         });
 
         let kucoin_market_for_usdt_usdc_conversion = "USDT-USDC".to_string();
-        let topic = "/market/ticker:USDT-USDC";
+        let topic = "/market/ticker";
         let _handle_kucoin_usdt_usdc_conversion = thread::spawn(move || {
             stream_kucoin_socket(
                 &get_kucoin_url(),
