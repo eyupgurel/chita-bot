@@ -247,7 +247,6 @@ pub struct SpotTradingTicker {
     pub best_bid: f64, // Best bid price
     #[serde(deserialize_with = "deserialize_to_f64_size_via_decimal_kucoin")]
     pub best_bid_size: f64, // Best bid size
-    #[serde(rename = "Time")]
 	pub time: u128	//The matching time of the latest transaction
 }
 
