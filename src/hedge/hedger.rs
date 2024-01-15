@@ -442,12 +442,12 @@ impl Hedger for HGR {
                             - ((data.quantity_sent_for_cancellation as i128)
                                 * (if data.is_buy { 1 } else { -1 }));
 
-                        tracing::info!("Old Bluefin Position {:?}", self.bluefin_position);
+                        tracing::debug!("Old Bluefin Position {:?}", self.bluefin_position);
 
                         self.bluefin_position.quantity = new_qty.abs() as u128;
                         self.bluefin_position.side = if new_qty > 0 { true } else { false };
 
-                        tracing::info!("New Bluefin Position {:?}", self.bluefin_position);
+                        tracing::debug!("New Bluefin Position {:?}", self.bluefin_position);
 
                         let (_bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
                         let diff = if is_buy {
@@ -565,7 +565,7 @@ impl Hedger for HGR {
             bluefin_quantity = bluefin_quantity * Decimal::from(-1);
         }
 
-        tracing::info!("Target Quantity before check: {}, kucoin quantity: {}, bluefin quantity: {}", 
+        tracing::debug!("Target Quantity before check: {}, kucoin quantity: {}, bluefin quantity: {}", 
         current_kucoin_qty.to_f64().unwrap(), current_kucoin_qty.to_f64().unwrap(), bluefin_quantity.to_f64().unwrap());
         
         // let target_quantity = current_kucoin_qty * Decimal::from(-1);
@@ -583,7 +583,7 @@ impl Hedger for HGR {
                 current_kucoin_qty
             };
 
-        tracing::info!("Target Quantity after check: {}", target_quantity.to_f64().unwrap());
+        tracing::debug!("Target Quantity after check: {}", target_quantity.to_f64().unwrap());
 
         let diff = target_quantity - bluefin_quantity;
 
@@ -646,6 +646,15 @@ impl Hedger for HGR {
     }
 
     fn hedge(&mut self, dry_run: bool, ob: Option<&OrderBook>, is_periodic: bool) {
+
+        if is_periodic {
+            let bluefin_market = self.market.symbols.bluefin.to_owned();
+            self.bluefin_position = self.bluefin_client.get_user_position(&bluefin_market);
+            tracing::info!(
+                bluefin_position_before_hedging = self.bluefin_position.quantity as f64 / BIGNUMBER_BASE as f64,
+                "Bluefin Position Before Periodic Hedging"
+            );
+        }
 
         let (bluefin_market, mut order_quantity, is_buy) = self.calc_net_pos_qty();
 
