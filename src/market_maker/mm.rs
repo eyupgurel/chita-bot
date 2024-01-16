@@ -478,7 +478,7 @@ impl MarketMaker for MM {
 
             match rx_bluefin_ob_diff.try_recv() {
                 Ok(value) => {
-                    tracing::info!("diff of bluefin ob: {:?}", value);
+                    tracing::debug!("diff of bluefin ob: {:?}", value);
                     bluefin_ob_diff_disconnect_breaker.on_success();
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
