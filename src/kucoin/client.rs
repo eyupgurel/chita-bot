@@ -355,6 +355,11 @@ pub mod client {
                 None,
                 Some(1000),
             );
+
+            if fills.data.is_none() {
+                return 0;
+            }
+
             let total_size = fills
                 .data
                 .unwrap()
