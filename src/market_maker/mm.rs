@@ -396,6 +396,7 @@ impl MarketMaker for MM {
                             net_quantity,
                         );
                     }
+                    ob_map.insert(key.to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -707,6 +708,8 @@ impl MarketMaker for MM {
 
     fn filter_ob_prices(&mut self, current_first_ask_price: Option<f64>, current_first_bid_price: Option<f64>) -> bool {
 
+        tracing::info!("Filtering orderbook prices...");
+
         let is_first_ask_price_changed = match (current_first_ask_price, self.last_first_ask_price) {
             (Some(current), Some(last)) => {
                 (current - last).abs() / last * 10000.0 >= self.vars.market_making_trigger_bps
@@ -725,6 +728,7 @@ impl MarketMaker for MM {
         self.last_first_ask_price = current_first_ask_price;
         self.last_first_bid_price = current_first_bid_price;
 
+        tracing::info!("orderbook prices passed: {}", is_first_ask_price_changed || is_first_bid_price_changed);
         is_first_ask_price_changed || is_first_bid_price_changed
     }
 
