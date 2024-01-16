@@ -626,25 +626,27 @@ impl Hedger for HGR {
         
         // let target_quantity = current_kucoin_qty * Decimal::from(-1);
 
-        let target_quantity = 
-        if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_negative()) || 
-            (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_positive()) || 
-            (bluefin_quantity.is_zero()) {
-                tracing::info!("Inverted signs, flipping kucoin qty");
-                current_kucoin_qty * Decimal::from(-1)
-            } else if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_positive()) || 
-                (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_negative()) {
-                    tracing::info!("Same signs, flipping bluefin and kucoin qty");
-                    bluefin_quantity = bluefin_quantity * Decimal::from(-1);
-                    current_kucoin_qty * Decimal::from(-1)
-            } else {
-                tracing::info!("Keeping kucoin qty same");
-                current_kucoin_qty
-            };
+        // let target_quantity = 
+        // if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_negative()) || 
+        //     (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_positive()) || 
+        //     (bluefin_quantity.is_zero()) {
+        //         tracing::info!("Inverted signs, flipping kucoin qty");
+        //         current_kucoin_qty * Decimal::from(-1)
+        //     } else if (current_kucoin_qty.is_sign_positive() && bluefin_quantity.is_sign_positive()) || 
+        //         (current_kucoin_qty.is_sign_negative() && bluefin_quantity.is_sign_negative()) {
+        //             tracing::info!("Same signs, flipping bluefin and kucoin qty");
+        //             bluefin_quantity = bluefin_quantity * Decimal::from(-1);
+        //             current_kucoin_qty * Decimal::from(-1)
+        //     } else {
+        //         tracing::info!("Keeping kucoin qty same");
+        //         current_kucoin_qty
+        //     };
 
-        tracing::info!("Target Quantity after check: {}", target_quantity.to_f64().unwrap());
+        // tracing::info!("Target Quantity after check: {}", target_quantity.to_f64().unwrap());
 
-        let diff = target_quantity - bluefin_quantity;
+        // let diff = target_quantity - bluefin_quantity;
+
+        let diff = (current_kucoin_qty + bluefin_quantity) * Decimal::from(-1);
 
         let order_quantity = diff.abs();
 
