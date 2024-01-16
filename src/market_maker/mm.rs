@@ -625,7 +625,7 @@ impl MarketMaker for MM {
                 let ask_price_check_price: bool = ask_price * usdt_usdc_conversion > tkr_bid_price;
                 let ask_price_check_bps =
                     ask_price * usdt_usdc_conversion * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price;
-                let ask_price_check_size = ask_size <= tkr_bid_size;
+                let ask_price_check_size = true; //ask_size <= tkr_bid_size;
 
                 let mut ask_price_check =
                     ask_price_check_price && ask_price_check_bps && ask_price_check_size;
@@ -666,7 +666,7 @@ impl MarketMaker for MM {
                 let bid_price_check = bid_price * usdt_usdc_conversion < tkr_ask_price;
                 let bid_price_check_bps =
                     bid_price * usdt_usdc_conversion * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price;
-                let bid_size_check = bid_size <= tkr_ask_size;
+                let bid_size_check = true; //bid_size <= tkr_ask_size;
 
                 let bid_check = bid_price_check && bid_price_check_bps && bid_size_check;
 
