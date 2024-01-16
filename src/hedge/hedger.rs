@@ -310,6 +310,8 @@ impl Hedger for HGR {
                 tx_kucoin_trade_orders, // Sender channel of the appropriate type
                 |msg: &str| -> Option<KucoinTradeOrder> {
 
+                    tracing::info!("Kucoin Trade Order update: {:?}", msg);
+
                     let kucoin_trade_order_msg: KucoinTradeOrderMessage =
                         serde_json::from_str(&msg).expect("Can't parse");
 
