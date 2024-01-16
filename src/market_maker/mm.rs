@@ -359,9 +359,9 @@ impl MarketMaker for MM {
 
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
-                    // tracing::debug!("kucoin ob: {:?}", value);
-                    // kucoin_ob_disconnect_breaker.on_success();
-                    // ob_map.insert(key.to_string(), value);
+                    tracing::debug!("kucoin ob: {:?}", value);
+                    kucoin_ob_disconnect_breaker.on_success();
+                    ob_map.insert(key.to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -396,7 +396,6 @@ impl MarketMaker for MM {
                             net_quantity,
                         );
                     }
-                    ob_map.insert(key.to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
