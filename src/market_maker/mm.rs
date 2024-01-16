@@ -7,21 +7,21 @@ use crate::env::EnvVars;
 use crate::kucoin::{AvailableBalance, CallResponse, Credentials, KuCoinClient};
 use crate::models::binance_models::DepthUpdate;
 use crate::models::bluefin_models::OrderbookDepthUpdate;
-use crate::models::kucoin_models::SpotTradingTicker;
-use crate::models::kucoin_models::SpotTradingTickerMessage;
 use crate::models::common::{
     abs, add, divide, round_to_precision, subtract, BookOperations, CircuitBreakerConfig, Market,
     OrderBook,
 };
-use crate::TradeOrderUpdate;
 use crate::models::kucoin_models::Level2Depth;
+use crate::models::kucoin_models::SpotTradingTicker;
+use crate::models::kucoin_models::SpotTradingTickerMessage;
 use crate::sockets::binance_ob_socket::BinanceOrderBookStream;
 use crate::sockets::bluefin_ob_socket::BluefinOrderBookStream;
 use crate::sockets::common::OrderBookStream;
 use crate::sockets::kucoin_socket::stream_kucoin_socket;
 use crate::sockets::kucoin_ticker_socket::stream_kucoin_ticker_socket;
-use crate::sockets::kucoin_utils::get_kucoin_url;
 use crate::sockets::kucoin_utils::get_kucoin_spot_url;
+use crate::sockets::kucoin_utils::get_kucoin_url;
+use crate::TradeOrderUpdate;
 #[allow(unused_imports)]
 use log::{debug, error, info};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
@@ -47,7 +47,13 @@ pub struct MM {
     rx_account_data_kc: Receiver<AvailableBalance>,
     rx_hedger_stats: Receiver<f64>,
     tx_bluefin_hedger_ob: Sender<OrderBook>,
-    rx_bluefin_trade_order_update: Receiver<TradeOrderUpdate>
+    rx_bluefin_trade_order_update: Receiver<TradeOrderUpdate>,
+    last_first_ask_price: Option<f64>, 
+    last_first_bid_price: Option<f64>,
+    vars: EnvVars,
+    
+    num_bids: i128,
+    num_asks: i128,
 }
 
 impl MM {
@@ -61,7 +67,7 @@ impl MM {
         Sender<AvailableBalance>,
         Sender<f64>,
         Receiver<OrderBook>,
-        Sender<TradeOrderUpdate>
+        Sender<TradeOrderUpdate>,
     ) {
         let vars: EnvVars = env::env_variables();
 
@@ -98,7 +104,17 @@ impl MM {
         let (tx_hedger_stats, rx_hedger_stats): (Sender<f64>, Receiver<f64>) = mpsc::channel();
         let (tx_bluefin_hedger_ob, rx_bluefin_hedger_ob): (Sender<OrderBook>, Receiver<OrderBook>) =
             mpsc::channel();
-        let(tx_bluefin_trade_order_update, rx_bluefin_trade_order_update): (Sender<TradeOrderUpdate>, Receiver<TradeOrderUpdate>) = mpsc::channel();
+        let (tx_bluefin_trade_order_update, rx_bluefin_trade_order_update): (
+            Sender<TradeOrderUpdate>,
+            Receiver<TradeOrderUpdate>,
+        ) = mpsc::channel();
+
+        let vars: EnvVars = env::env_variables();
+        let mut last_first_ask_price: Option<f64> = None;
+        let mut last_first_bid_price: Option<f64> = None;
+
+        let mut num_bids = 0;
+        let mut num_asks =0;
 
         let name = format!("Market Maker for {}", market.name);
 
@@ -123,14 +139,20 @@ impl MM {
                 rx_account_data_kc,
                 rx_hedger_stats,
                 tx_bluefin_hedger_ob,
-                rx_bluefin_trade_order_update
+                rx_bluefin_trade_order_update,
+                last_first_ask_price, 
+                last_first_bid_price,
+                vars,
+
+                num_bids,
+                num_asks,
             },
             tx_stats,
             tx_account_data,
             tx_account_data_kc,
             tx_hedger_stats,
             rx_bluefin_hedger_ob,
-            tx_bluefin_trade_order_update
+            tx_bluefin_trade_order_update,
         )
     }
 
@@ -186,6 +208,8 @@ pub trait MarketMaker {
     fn place_maker_orders(&mut self, mm: &((Vec<f64>, Vec<f64>), (Vec<f64>, Vec<f64>)));
 
     fn debug_ob_map(&self, ob_map: &HashMap<String, OrderBook>);
+
+    fn filter_ob_prices(&mut self, current_first_ask_price: Option<f64>, current_first_bid_price: Option<f64>) -> bool;
 }
 
 impl MarketMaker for MM {
@@ -229,12 +253,11 @@ impl MarketMaker for MM {
                 &topic,
                 tx_kucoin_usdt_usdc_conversion, // Sender channel of the appropriate type
                 |msg: &str| -> Option<SpotTradingTicker> {
-
                     tracing::debug!("USDT_USDC ticker {}", &msg);
 
                     let kucoin_usdt_usdc_ticker: SpotTradingTickerMessage =
                         serde_json::from_str(&msg).expect("Can't parse");
-                    
+
                     if kucoin_usdt_usdc_ticker.data.is_none() {
                         return None;
                     } else {
@@ -324,7 +347,8 @@ impl MarketMaker for MM {
                 Ok(value) => {
                     if value.1.is_some() {
                         let data = value.1.unwrap();
-                        usdt_usdc_conversion_map.insert(kucoin_usdt_usdc_conversion_key.clone(), data.price);
+                        usdt_usdc_conversion_map
+                            .insert(kucoin_usdt_usdc_conversion_key.clone(), data.price);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
@@ -335,9 +359,9 @@ impl MarketMaker for MM {
 
             match rx_kucoin_ob.try_recv() {
                 Ok((key, value)) => {
-                    tracing::debug!("kucoin ob: {:?}", value);
-                    kucoin_ob_disconnect_breaker.on_success();
-                    ob_map.insert(key.to_string(), value);
+                    // tracing::debug!("kucoin ob: {:?}", value);
+                    // kucoin_ob_disconnect_breaker.on_success();
+                    // ob_map.insert(key.to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -358,15 +382,19 @@ impl MarketMaker for MM {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        let usdt_usdc_conversion = usdt_usdc_conversion_map.get(&kucoin_usdt_usdc_conversion_key).expect("Key not found").clone();
+                        let usdt_usdc_conversion = usdt_usdc_conversion_map
+                            .get(&kucoin_usdt_usdc_conversion_key)
+                            .expect("Key not found")
+                            .clone();
                         self.market_make(
-                            ref_ob, 
-                            mm_ob, 
-                            tkr_ob, 
+                            ref_ob,
+                            mm_ob,
+                            tkr_ob,
                             usdt_usdc_conversion,
-                            buy_percent, 
-                            0.0, 
-                            net_quantity);
+                            buy_percent,
+                            0.0,
+                            net_quantity,
+                        );
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
@@ -382,9 +410,9 @@ impl MarketMaker for MM {
 
             match rx_binance_ob.try_recv() {
                 Ok(value) => {
-                    tracing::debug!("binance ob: {:?}", value);
-                    binance_ob_disconnect_breaker.on_success();
-                    ob_map.insert("binance".to_string(), value);
+                    // tracing::debug!("binance ob: {:?}", value);
+                    // binance_ob_disconnect_breaker.on_success();
+                    // ob_map.insert("binance".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
@@ -404,8 +432,19 @@ impl MarketMaker for MM {
                     if ob_map.len() == 3 {
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
                         let tkr_ob: &OrderBook = ob_map.get("bluefin").expect("Key not found");
-                        let usdt_usdc_conversion = usdt_usdc_conversion_map.get(&kucoin_usdt_usdc_conversion_key).expect("Key not found").clone();
-                        self.market_make(&value, mm_ob, tkr_ob, usdt_usdc_conversion, buy_percent, 0.0, net_quantity);
+                        let usdt_usdc_conversion = usdt_usdc_conversion_map
+                            .get(&kucoin_usdt_usdc_conversion_key)
+                            .expect("Key not found")
+                            .clone();
+                        self.market_make(
+                            &value,
+                            mm_ob,
+                            tkr_ob,
+                            usdt_usdc_conversion,
+                            buy_percent,
+                            0.0,
+                            net_quantity,
+                        );
                     }
                     ob_map.insert("binance".to_string(), value);
                 }
@@ -422,9 +461,9 @@ impl MarketMaker for MM {
 
             match rx_bluefin_ob.try_recv() {
                 Ok(value) => {
-                    tracing::debug!("bluefin ob: {:?}", value);
-                    bluefin_ob_disconnect_breaker.on_success();
-                    ob_map.insert("bluefin".to_string(), value);
+                    // tracing::debug!("bluefin ob: {:?}", value);
+                    // bluefin_ob_disconnect_breaker.on_success();
+                    // ob_map.insert("bluefin".to_string(), value);
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from binance yet
@@ -439,13 +478,24 @@ impl MarketMaker for MM {
 
             match rx_bluefin_ob_diff.try_recv() {
                 Ok(value) => {
-                    tracing::debug!("diff of bluefin ob: {:?}", value);
+                    tracing::info!("diff of bluefin ob: {:?}", value);
                     bluefin_ob_diff_disconnect_breaker.on_success();
                     if ob_map.len() == 3 {
                         let ref_ob: &OrderBook = ob_map.get("binance").expect("Key not found");
                         let mm_ob: &OrderBook = ob_map.get("kucoin").expect("Key not found");
-                        let usdt_usdc_conversion = usdt_usdc_conversion_map.get(&kucoin_usdt_usdc_conversion_key).expect("Key not found").clone();
-                        self.market_make(ref_ob, mm_ob, &value, usdt_usdc_conversion, buy_percent, 0.0, net_quantity);
+                        let usdt_usdc_conversion = usdt_usdc_conversion_map
+                            .get(&kucoin_usdt_usdc_conversion_key)
+                            .expect("Key not found")
+                            .clone();
+                        self.market_make(
+                            ref_ob,
+                            mm_ob,
+                            &value,
+                            usdt_usdc_conversion,
+                            buy_percent,
+                            0.0,
+                            net_quantity,
+                        );
                     }
                     let _ = self.tx_bluefin_hedger_ob.send(value.clone());
                     ob_map.insert("bluefin".to_string(), value);
@@ -477,7 +527,6 @@ impl MarketMaker for MM {
             match self.rx_bluefin_trade_order_update.try_recv() {
                 Ok(value) => {
                     tracing::info!("Bluefin Trade Order Update {:?}", value);
-
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from kucoin yet
@@ -504,7 +553,6 @@ impl MarketMaker for MM {
             match self.rx_account_data.try_recv() {
                 Ok(value) => {
                     tracing::debug!("Bluefin available balance: {:?}", value.account_value);
-
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No message from bluefin yet
@@ -555,7 +603,7 @@ impl MarketMaker for MM {
         let mut mm_asks = mm.0;
         let mut mm_bids = mm.1;
 
-        if buy_percent < 50.0 && (net_quantity * -1.0) < 0.0  {
+        if buy_percent < 50.0 && (net_quantity * -1.0) < 0.0 {
             mm_asks = (Vec::new(), Vec::new());
         }
 
@@ -575,10 +623,12 @@ impl MarketMaker for MM {
             .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
             .filter(|&(ask_price, ask_size, tkr_bid_price, tkr_bid_size)| {
                 let ask_price_check_price: bool = ask_price * usdt_usdc_conversion > tkr_bid_price;
-                let ask_price_check_bps = ask_price * usdt_usdc_conversion * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price;
+                let ask_price_check_bps =
+                    ask_price * usdt_usdc_conversion * (10000.0 - 2.0) / 10000.0 >= tkr_bid_price;
                 let ask_price_check_size = ask_size <= tkr_bid_size;
 
-                let mut ask_price_check = ask_price_check_price && ask_price_check_bps && ask_price_check_size;
+                let mut ask_price_check =
+                    ask_price_check_price && ask_price_check_bps && ask_price_check_size;
 
                 tracing::debug!(
                     ask_price_check_price = ask_price_check_price,
@@ -614,7 +664,8 @@ impl MarketMaker for MM {
             .map(|((left1, right1), (left2, right2))| (left1, right1, left2, right2))
             .filter(|&(bid_price, bid_size, tkr_ask_price, tkr_ask_size)| {
                 let bid_price_check = bid_price * usdt_usdc_conversion < tkr_ask_price;
-                let bid_price_check_bps = bid_price * usdt_usdc_conversion * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price;
+                let bid_price_check_bps =
+                    bid_price * usdt_usdc_conversion * (10000.0 + 2.0) / 10000.0 <= tkr_ask_price;
                 let bid_size_check = bid_size <= tkr_ask_size;
 
                 let bid_check = bid_price_check && bid_price_check_bps && bid_size_check;
@@ -628,7 +679,6 @@ impl MarketMaker for MM {
                 );
 
                 bid_check
-
             })
             .collect::<Vec<_>>()
             .iter()
@@ -647,11 +697,35 @@ impl MarketMaker for MM {
         tracing::info!("Got best prices for market orders. Placing Limit Order...");
 
         if self.last_mm_instant.elapsed()
-            >= Duration::from_millis(vars.market_making_time_throttle_period)
+            >= Duration::from_millis(vars.market_making_time_throttle_period) && 
+                self.filter_ob_prices(ask_prices.first().copied(), bid_prices.first().copied())
         {
             self.place_maker_orders(&((ask_prices, ask_sizes), (bid_prices, bid_sizes)));
             self.last_mm_instant = Instant::now();
         }
+    }
+
+    fn filter_ob_prices(&mut self, current_first_ask_price: Option<f64>, current_first_bid_price: Option<f64>) -> bool {
+
+        let is_first_ask_price_changed = match (current_first_ask_price, self.last_first_ask_price) {
+            (Some(current), Some(last)) => {
+                (current - last).abs() / last * 10000.0 >= self.vars.market_making_trigger_bps
+            }
+            _ => false, // Consider unchanged if either current or last price is None
+        };
+
+        let is_first_bid_price_changed = match (current_first_bid_price, self.last_first_bid_price) {
+            (Some(current), Some(last)) => {
+                (current - last).abs() / last * 10000.0 >= self.vars.market_making_trigger_bps
+            }
+            _ => false, // Consider unchanged if either current or last price is None
+        };
+
+        // Update the last known prices
+        self.last_first_ask_price = current_first_ask_price;
+        self.last_first_bid_price = current_first_bid_price;
+
+        is_first_ask_price_changed || is_first_bid_price_changed
     }
 
     fn create_mm_pair(
@@ -738,7 +812,6 @@ impl MarketMaker for MM {
 
             if !are_asks_empty {
                 if let Some(top_ask) = self.extract_top_price_and_size(&mm.0) {
-
                     let price = round_to_precision(
                         top_ask.0 - (2.0 * top_ask.0 / (1.0 * 10000.0)),
                         self.market.price_precision,
@@ -750,8 +823,7 @@ impl MarketMaker for MM {
                         market = self.market.symbols.kucoin,
                         price = price,
                         quantity = (quantity as f64 / 100.0),
-                        volume =
-                            price * (quantity as f64) / 100.0,
+                        volume = price * (quantity as f64) / 100.0,
                         dry_run = &dry_run,
                         "Place Maker Ask Order"
                     );
@@ -766,15 +838,21 @@ impl MarketMaker for MM {
 
                         self.kucoin_ask_order_response = ask_order_response;
 
-                        tracing::info!("Market Maker Ask Order status: {:?}", self.kucoin_ask_order_response);
+                        tracing::info!(
+                            "Market Maker Ask Order status: {:?}",
+                            self.kucoin_ask_order_response
+                        );
+
+                        if self.kucoin_ask_order_response.error.is_none() {
+                            self.num_asks += 1;
+                        }
                     }
 
-                    tracing::info!("Placed ask limit order on market maker.");
+                    tracing::info!("Placed ask limit order on market maker. Current number of asks {}", self.num_asks);
                 }
             }
             if !are_bids_empty {
                 if let Some(top_bid) = self.extract_top_price_and_size(&mm.1) {
-
                     let price = round_to_precision(
                         top_bid.0 + (2.0 * top_bid.0 / (1.0 * 10000.0)),
                         self.market.price_precision,
@@ -786,8 +864,7 @@ impl MarketMaker for MM {
                         market = self.market.symbols.kucoin,
                         price = price,
                         quantity = (quantity as f64 / 100.0),
-                        volume =
-                            price * (quantity as f64) / 100.0,
+                        volume = price * (quantity as f64) / 100.0,
                         dry_run = &dry_run,
                         "Place Maker Bid Order"
                     );
@@ -799,12 +876,18 @@ impl MarketMaker for MM {
                             quantity,
                         );
                         self.kucoin_bid_order_response = bid_order_response;
-                        
-                        tracing::info!("Market Maker Ask Order status: {:?}", self.kucoin_bid_order_response);
-                        
+
+                        tracing::info!(
+                            "Market Maker Bid Order status: {:?}",
+                            self.kucoin_bid_order_response
+                        );
+
+                        if self.kucoin_bid_order_response.error.is_none() {
+                            self.num_bids += 1;
+                        }
                     }
 
-                    tracing::info!("Placed bid limit order on market maker.");
+                    tracing::info!("Placed bid limit order on market maker. Current number of bids {}", self.num_bids);
                 }
             }
         } else {
