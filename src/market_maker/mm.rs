@@ -591,7 +591,7 @@ impl MarketMaker for MM {
     ) {
         let vars: EnvVars = env::env_variables();
 
-        tracing::info!("Calculating best taker prices...");
+        tracing::debug!("Calculating best taker prices...");
 
         let mm = self.create_mm_pair(ref_book, mm_book, tkr_book, shift, net_quantity);
 
@@ -639,7 +639,7 @@ impl MarketMaker for MM {
                 );
 
                 if (net_quantity * -1.0) > 0.0 {
-                    tracing::info!("ask_price_check overwritten to true");
+                    tracing::debug!("ask_price_check overwritten to true");
                     ask_price_check = true;
                 } else {
                     //ignore
@@ -688,13 +688,13 @@ impl MarketMaker for MM {
         let (ask_prices, ask_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_asks.into_iter().unzip();
         let (bid_prices, bid_sizes): (Vec<f64>, Vec<f64>) = filtered_mm_bids.into_iter().unzip();
 
-        tracing::info!(
+        tracing::debug!(
             market = self.market.symbols.kucoin,
             mm_ask_prices_empty = ask_prices.is_empty(),
             mm_bid_prices_empty = bid_prices.is_empty(),
             "Empty Ask and Bid Price Check"
         );
-        tracing::info!("Got best prices for market orders. Placing Limit Order...");
+        tracing::debug!("Got best prices for market orders. Placing Limit Order...");
 
         if self.last_mm_instant.elapsed()
             >= Duration::from_millis(vars.market_making_time_throttle_period) && 
@@ -707,7 +707,7 @@ impl MarketMaker for MM {
 
     fn filter_ob_prices(&mut self, current_first_ask_price: Option<f64>, current_first_bid_price: Option<f64>) -> bool {
 
-        tracing::info!("Filtering orderbook prices...");
+        tracing::debug!("Filtering orderbook prices...");
 
         let is_first_ask_price_changed = match (current_first_ask_price, self.last_first_ask_price) {
             (Some(current), Some(last)) => {
@@ -727,7 +727,7 @@ impl MarketMaker for MM {
         self.last_first_ask_price = current_first_ask_price;
         self.last_first_bid_price = current_first_bid_price;
 
-        tracing::info!("orderbook prices passed: {}", is_first_ask_price_changed || is_first_bid_price_changed);
+        tracing::debug!("orderbook prices passed: {}", is_first_ask_price_changed || is_first_bid_price_changed);
         is_first_ask_price_changed || is_first_bid_price_changed
     }
 
@@ -821,7 +821,7 @@ impl MarketMaker for MM {
                     );
                     let quantity = top_ask.1;
 
-                    tracing::info!(
+                    tracing::debug!(
                         name = self.name,
                         market = self.market.symbols.kucoin,
                         price = price,
@@ -841,7 +841,7 @@ impl MarketMaker for MM {
 
                         self.kucoin_ask_order_response = ask_order_response;
 
-                        tracing::info!(
+                        tracing::debug!(
                             "Market Maker Ask Order status: {:?}",
                             self.kucoin_ask_order_response
                         );
@@ -851,7 +851,7 @@ impl MarketMaker for MM {
                         }
                     }
 
-                    tracing::info!("Placed ask limit order on market maker. Current number of asks {}", self.num_asks);
+                    tracing::info!("Placed ask limit order on market maker for market {}. Current number of asks {}", &bluefin_market, self.num_asks);
                 }
             }
             if !are_bids_empty {
@@ -862,7 +862,7 @@ impl MarketMaker for MM {
                     );
                     let quantity = top_bid.1;
 
-                    tracing::info!(
+                    tracing::debug!(
                         name = self.name,
                         market = self.market.symbols.kucoin,
                         price = price,
@@ -880,7 +880,7 @@ impl MarketMaker for MM {
                         );
                         self.kucoin_bid_order_response = bid_order_response;
 
-                        tracing::info!(
+                        tracing::debug!(
                             "Market Maker Bid Order status: {:?}",
                             self.kucoin_bid_order_response
                         );
@@ -890,7 +890,7 @@ impl MarketMaker for MM {
                         }
                     }
 
-                    tracing::info!("Placed bid limit order on market maker. Current number of bids {}", self.num_bids);
+                    tracing::info!("Placed bid limit order on market maker for market {}. Current number of bids {}", &bluefin_market, self.num_bids);
                 }
             }
         } else {
