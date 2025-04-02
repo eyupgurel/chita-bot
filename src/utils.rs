@@ -20,6 +20,10 @@ pub fn get_random_number() -> u128 {
     return get_current_time() + u128::from(rand::random::<u32>());
 }
 
+pub fn get_random_decimal() -> f64 {
+    return get_current_time() as f64 + f64::from(rand::random::<f64>());
+}
+
 #[allow(dead_code)]
 pub fn get_random_string() -> String {
     return rand::thread_rng()

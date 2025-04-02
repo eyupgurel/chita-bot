@@ -30,8 +30,7 @@ pub struct Market {
 #[derive(Deserialize, Debug, Clone, Copy)]
 pub struct CircuitBreakerConfig {
     pub num_retries: u8,
-    pub failure_threshold: u8,
-    pub loss_threshold_bps: f32,
+    pub failure_threshold: u8
 }
 
 // Define the overall structure
@@ -67,8 +66,8 @@ impl BookOperations for OrderBook {
             .collect()
     }
     fn ask_shift(&self, shift:f64) -> Vec<f64> {
-        self.bids.iter()
-            .map(|(_, bid_size)| (bid_size + shift))
+        self.asks.iter()
+            .map(|(_, ask_size)| (ask_size + shift))
             .collect()
     }
 

@@ -55,8 +55,7 @@ mod test {
             circuit_breaker: CircuitBreakerBase {
                 config: CircuitBreakerConfig {
                     num_retries: 3,
-                    failure_threshold: 3,
-                    loss_threshold_bps: 3.0,
+                    failure_threshold: 3
                 },
                 num_failures: 0,
                 state: State::Closed,
@@ -105,8 +104,7 @@ mod test {
             circuit_breaker: CircuitBreakerBase {
                 config: CircuitBreakerConfig {
                     num_retries: 3,
-                    failure_threshold: 3,
-                    loss_threshold_bps: 3.0,
+                    failure_threshold: 3
                 },
                 num_failures: 0,
                 state: State::Closed,

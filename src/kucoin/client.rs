@@ -1,25 +1,26 @@
 pub mod client {
     use crate::env::EnvVars;
-    use crate::{
-        env,
-        kucoin::models::CallResponse,
-        utils,
-    };
+    use crate::{env, kucoin::models::CallResponse, utils};
     #[allow(deprecated)]
     use base64::encode;
     use hmac::{Hmac, Mac};
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+    use reqwest::blocking::RequestBuilder;
     use serde_json::{json, Value};
     use sha2::Sha256;
     use snailquote::unescape;
+    use warp::filters::method::head;
     use std::collections::HashMap;
+    use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[allow(unused)]
     type HmacSha256 = Hmac<Sha256>;
 
-    use crate::kucoin::models::{Error, FillsResponse, Method, RecentFillsResponse, Response, TransactionHistory};
-    use crate::models::kucoin_models::{PositionList, KucoinUserPosition};
+    use crate::kucoin::models::{
+        Error, FillsResponse, Method, RecentFillsResponse, Response, TransactionHistory,
+    };
+    use crate::models::kucoin_models::{KucoinUserPosition, PositionList};
 
     #[derive(Debug, Clone)]
     pub struct Credentials {
@@ -94,13 +95,38 @@ pub mod client {
 
             let headers: HeaderMap = self.sign_headers(endpoint.clone(), None, None, Method::POST);
 
+            let url_clone = url.clone();
+            let headers_clone = headers.clone();
+
             let res = self.client.post(url).headers(headers).send().unwrap();
 
             let body = res.text().unwrap();
 
             let resp: Response = serde_json::from_str(&body).expect("JSON Decoding failed");
 
-            resp.data.token
+            if resp.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
+            if !resp.code.eq("\"200000\"") && resp.msg.is_some() {
+                let error_code = resp.code.to_string().clone().parse::<i128>().unwrap();
+                let error_msg = resp.msg.clone().unwrap_or("".to_string());
+
+                tracing::error!(
+                    error_code = error_code,
+                    error_message = error_msg,
+                    "Kucoin Private Token REST API"
+                );
+
+                //Sleep for x seconds and try again
+                thread::sleep(Duration::from_secs(1));
+                let res = self.client.post(url_clone).headers(headers_clone).send().unwrap();
+                let body = res.text().unwrap();
+                let resp: Response = serde_json::from_str(&body).expect("JSON Decoding failed");
+                return resp.data.unwrap().token
+            }
+
+            resp.data.unwrap().token
         }
 
         pub fn get_kucoin_private_socket_url(&self) -> String {
@@ -124,7 +150,36 @@ pub mod client {
             )
             .unwrap();
 
-            return resp.data.token;
+            if resp.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
+            if !resp.code.eq("\"200000\"") && resp.msg.is_some() {
+                let error_code = resp.code.to_string().clone().parse::<i128>().unwrap();
+                let error_msg = resp.msg.clone().unwrap_or("".to_string());
+
+                tracing::error!(
+                    error_code = error_code,
+                    error_message = error_msg,
+                    "Kucoin Token REST API"
+                );
+
+                //Sleep for x seconds and try again
+                thread::sleep(Duration::from_secs(1));
+                let new_res: Response = serde_json::from_str(
+                    client
+                        .post(onboarding_url)
+                        .send()
+                        .unwrap()
+                        .text()
+                        .unwrap()
+                        .as_str(),
+                )
+                .unwrap();
+                return new_res.data.unwrap().token
+            }
+
+            return resp.data.unwrap().token;
         }
 
         pub fn get_recent_fills(&self, market: &str) -> RecentFillsResponse {
@@ -142,6 +197,9 @@ pub mod client {
             let headers: HeaderMap =
                 self.sign_headers(endpoint.clone(), None, Some(query), Method::GET);
 
+            let url_clone = url.clone();
+            let headers_clone = headers.clone();
+
             let res: String = self
                 .client
                 .get(url)
@@ -153,6 +211,37 @@ pub mod client {
 
             let resp: RecentFillsResponse =
                 serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            if resp.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
+            if !resp.code.eq("\"200000\"") && resp.msg.is_some() {
+                let error_code = resp.code.to_string().clone().parse::<i128>().unwrap();
+                let error_msg = resp.msg.clone().unwrap_or("".to_string());
+
+                tracing::error!(
+                    error_code = error_code,
+                    error_message = error_msg,
+                    "Kucoin Recent Fills REST API"
+                );
+
+                //Sleep for x seconds and try again
+                thread::sleep(Duration::from_secs(1));
+                let res: String = self
+                    .client
+                    .get(url_clone)
+                    .headers(headers_clone)
+                    .send()
+                    .unwrap()
+                    .text()
+                    .unwrap();
+
+                let resp: RecentFillsResponse =
+                    serde_json::from_str(&res).expect("JSON Decoding failed");
+
+                return resp;
+            }
 
             return resp;
         }
@@ -206,6 +295,9 @@ pub mod client {
             let headers: HeaderMap =
                 self.sign_headers(endpoint.clone(), None, Some(query), Method::GET);
 
+            let url_clone = url.clone();
+            let headers_clone = headers.clone();
+
             let res: String = self
                 .client
                 .get(url)
@@ -216,6 +308,35 @@ pub mod client {
                 .unwrap();
 
             let resp: FillsResponse = serde_json::from_str(&res).expect("JSON Decoding failed");
+
+            if resp.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
+            if !resp.code.eq("\"200000\"") && resp.msg.is_some() {
+                let error_code = resp.code.to_string().clone().parse::<i128>().unwrap();
+                let error_msg = resp.msg.clone().unwrap_or("".to_string());
+
+                tracing::error!(
+                    error_code = error_code,
+                    error_message = error_msg,
+                    "Kucoin Fills REST API"
+                );
+
+                //Sleep for x seconds and try again
+                thread::sleep(Duration::from_secs(1));
+                let res: String = self
+                    .client
+                    .get(url_clone)
+                    .headers(headers_clone)
+                    .send()
+                    .unwrap()
+                    .text()
+                    .unwrap();
+
+                let resp: FillsResponse = serde_json::from_str(&res).expect("JSON Decoding failed");
+                return resp;
+            }
 
             return resp;
         }
@@ -234,20 +355,25 @@ pub mod client {
                 None,
                 Some(1000),
             );
+
+            if fills.data.is_none() {
+                return 0;
+            }
+
             let total_size = fills
                 .data
+                .unwrap()
                 .items
                 .iter()
                 .fold(0, |acc, trade| acc + trade.size);
             total_size
         }
 
-        pub fn get_transaction_history(&self) -> TransactionHistory{
+        pub fn get_transaction_history(&self) -> TransactionHistory {
             let endpoint = String::from("/api/v1/transaction-history");
             let url: String = format!("{}{}", &self.api_gateway, endpoint);
 
-            let headers: HeaderMap =
-                self.sign_headers(endpoint.clone(), None, None, Method::GET);
+            let headers: HeaderMap = self.sign_headers(endpoint.clone(), None, None, Method::GET);
 
             let res: String = self
                 .client
@@ -258,17 +384,32 @@ pub mod client {
                 .text()
                 .unwrap();
 
-            let transaction_history: TransactionHistory  = serde_json::from_str(&res).expect("Can't parse");
-            transaction_history
+            let transaction_history: TransactionHistory =
+                serde_json::from_str(&res).expect("Can't parse");
 
+            if transaction_history.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
+                if !transaction_history.code.eq("\"200000\"") && transaction_history.msg.is_some() {
+                    let error_code = transaction_history.code.to_string().clone().parse::<i128>().unwrap();
+                    let error_msg = transaction_history.msg.clone().unwrap_or("".to_string());
+    
+                    tracing::error!(
+                        error_code = error_code,
+                        error_message = error_msg,
+                        "Kucoin Transaction History REST API"
+                    );
+                }
+
+            transaction_history
         }
 
-        pub fn get_position_list(&self) -> PositionList{
+        pub fn get_position_list(&self) -> PositionList {
             let endpoint = String::from("/api/v1/positions");
             let url: String = format!("{}{}", &self.api_gateway, endpoint);
 
-            let headers: HeaderMap =
-                self.sign_headers(endpoint.clone(), None, None, Method::GET);
+            let headers: HeaderMap = self.sign_headers(endpoint.clone(), None, None, Method::GET);
 
             let res: String = self
                 .client
@@ -279,7 +420,23 @@ pub mod client {
                 .text()
                 .unwrap();
 
-            let position_list: PositionList  = serde_json::from_str(&res).expect("Can't parse");
+            let position_list: PositionList = serde_json::from_str(&res).expect("Can't parse");
+
+            if position_list.code.eq("\"429000\"") {
+                thread::sleep(Duration::from_secs(3));
+            }
+
+            if !position_list.code.eq("\"200000\"") && position_list.msg.is_some() {
+                let error_code = position_list.code.to_string().clone().parse::<i128>().unwrap();
+                let error_msg = position_list.msg.clone().unwrap_or("".to_string());
+
+                tracing::error!(
+                    error_code = error_code,
+                    error_message = error_msg,
+                    "Kucoin Position List REST API"
+                );
+            }
+
             position_list
         }
 
@@ -315,7 +472,7 @@ pub mod client {
                 return Some(user_position);
             } else {
                 let error: Error = serde_json::from_str(&res).expect("JSON Decoding failed");
-                tracing::warn!("Error getting kucoin position: {:#?}", error);
+                tracing::error!("Error getting kucoin position: {:#?}", error);
                 return None;
             }
         }

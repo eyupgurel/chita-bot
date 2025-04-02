@@ -65,6 +65,19 @@ pub struct OrderSettlementUpdate {
     pub matched_orders: Option<Vec<MatchedOrder>>
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderSettlementCancellation {
+    pub order_hash: String,
+    pub user_address: String,
+    pub symbol: String,
+    pub message: String,
+    pub is_buy: bool,
+    pub quantity_sent_for_cancellation: u128,
+    pub fill_id: String,
+    pub timestamp: u128,
+}
+
 #[derive(Debug, Clone)]
 pub struct Wallet {
     pub signing_key: SigningKey,
@@ -98,6 +111,29 @@ pub fn parse_user_trade_order_update(v: Value) -> TradeOrderUpdate {
         realized_pnl
     };
 
+}
+
+pub fn parse_order_settlement_cancellation(v: Value) -> OrderSettlementCancellation {
+    let order_hash: String = serde_json::from_str(&v["orderHash"].to_string()).unwrap();
+    let user_address: String = serde_json::from_str(&v["userAddress"].to_string()).unwrap();
+    let symbol: String = serde_json::from_str(&v["symbol"].to_string()).unwrap();
+    let message: String = serde_json::from_str(&v["message"].to_string()).unwrap();
+    let is_buy: bool = serde_json::from_str(&v["isBuy"].to_string()).unwrap();
+    let quantity_sent_for_cancellation_str: String = serde_json::from_str(&v["quantitySentForCancellation"].to_string()).unwrap();
+    let quantity_sent_for_cancellation: u128 = quantity_sent_for_cancellation_str.parse::<u128>().unwrap();
+    let fill_id: String = serde_json::from_str(&v["fillId"].to_string()).unwrap();
+    let timestamp: u128 = serde_json::from_str(&v["timestamp"].to_string()).unwrap();
+    
+    return OrderSettlementCancellation {
+        order_hash,
+        user_address,
+        symbol,
+        message,
+        is_buy,
+        quantity_sent_for_cancellation,
+        fill_id,
+        timestamp
+    }
 }
 
 pub fn parse_order_settlement_update(v: Value) -> OrderSettlementUpdate {
